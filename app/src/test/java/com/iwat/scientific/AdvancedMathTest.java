@@ -33,6 +33,9 @@ public class AdvancedMathTest {
         assertArrayEquals(new double[]{0,0,1},AdvancedMath.cross(new double[]{1,0,0},new double[]{0,1,0}),1e-12);
         assertEquals(5,AdvancedMath.magnitude(new double[]{3,4}),1e-12);
         assertThrows(IllegalArgumentException.class,()->AdvancedMath.matrixInverse(new double[][]{{1,2},{2,4}}));
+        double[][] six=new double[6][6]; for(int i=0;i<6;i++) six[i][i]=i+1;
+        assertEquals(720,AdvancedMath.matrixDeterminant(six),1e-9);
+        assertEquals(1,AdvancedMath.matrixMultiply(six,AdvancedMath.matrixInverse(six))[5][5],1e-10);
     }
     @Test public void tablesLimitsAndEquations() {
         assertEquals(1,AdvancedMath.limit("sin(x)/x",0,false),1e-4);
@@ -49,5 +52,8 @@ public class AdvancedMathTest {
         assertEquals(.375,AdvancedMath.binomial(4,2,.5),1e-12);
         assertEquals(Math.exp(-2)*2,AdvancedMath.poisson(1,2),1e-12);
         assertThrows(IllegalArgumentException.class,()->AdvancedMath.normalCdf(0,0,0));
+        assertEquals(.6875,AdvancedMath.binomialCdf(4,2,.5),1e-12);
+        assertEquals(Math.exp(-2)*5,AdvancedMath.poissonCdf(2,2),1e-12);
+        assertEquals(36.0/70,AdvancedMath.hypergeometric(8,4,4,2),1e-12);
     }
 }

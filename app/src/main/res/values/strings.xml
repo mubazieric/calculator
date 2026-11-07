@@ -1,4 +1,5 @@
 <resources>
     <string name="result_format">= %1$s</string>
     <string name="open_camera">◎   OPEN CAMERA</string>
+    <string name="open_email_to_send">OPEN EMAIL TO SEND</string>
 </resources>

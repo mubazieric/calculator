@@ -65,7 +65,7 @@ public final class AdvancedMath {
     }
 
     private static void square(double[][] matrix) {
-        if(matrix==null || matrix.length<2 || matrix.length>3) throw new IllegalArgumentException("Use a 2×2 or 3×3 matrix");
+        if(matrix==null || matrix.length<2 || matrix.length>6) throw new IllegalArgumentException("Use a 2×2 through 6×6 matrix");
         for(double[] row:matrix) {
             if(row==null || row.length!=matrix.length) throw new IllegalArgumentException("Matrix must be square");
             for(double value:row) finite(value);
@@ -73,9 +73,20 @@ public final class AdvancedMath {
     }
     public static double matrixDeterminant(double[][] matrix) {
         square(matrix);
-        if(matrix.length==2) return determinant(matrix[0][0],matrix[0][1],matrix[1][0],matrix[1][1]);
-        double[] a=matrix[0],b=matrix[1],c=matrix[2];
-        return finite(a[0]*(b[1]*c[2]-b[2]*c[1])-a[1]*(b[0]*c[2]-b[2]*c[0])+a[2]*(b[0]*c[1]-b[1]*c[0]));
+        int n=matrix.length; double[][] a=new double[n][n];
+        for(int i=0;i<n;i++) System.arraycopy(matrix[i],0,a[i],0,n);
+        double det=1;
+        for(int col=0;col<n;col++) {
+            int pivot=col; for(int row=col+1;row<n;row++) if(Math.abs(a[row][col])>Math.abs(a[pivot][col])) pivot=row;
+            if(a[pivot][col]==0) return 0;
+            if(pivot!=col) { double[] tmp=a[col]; a[col]=a[pivot]; a[pivot]=tmp; det=-det; }
+            double diagonal=a[col][col]; det*=diagonal;
+            for(int row=col+1;row<n;row++) {
+                double factor=a[row][col]/diagonal;
+                for(int c=col+1;c<n;c++) a[row][c]-=factor*a[col][c];
+            }
+        }
+        return finite(det);
     }
     /** Partial-pivot Gauss-Jordan elimination for small square systems. */
     public static double[] linearSystem(double[][] matrix,double[] rhs) {
@@ -167,6 +178,29 @@ public final class AdvancedMath {
         if(lambda==0) return k==0?1:0;
         double log=-lambda+k*Math.log(lambda); for(int i=2;i<=k;i++) log-=Math.log(i);
         return finite(Math.exp(log));
+    }
+    public static double binomialCdf(int n,int k,double p) {
+        if(k<0) return 0;
+        if(k>=n) { binomial(n,n,p); return 1; }
+        double sum=0; for(int i=0;i<=k;i++) sum+=binomial(n,i,p);
+        return Math.min(1,finite(sum));
+    }
+    public static double poissonCdf(int k,double lambda) {
+        if(k<0) return 0;
+        if(k>1000) throw new IllegalArgumentException("Use k ≤ 1000");
+        double sum=0; for(int i=0;i<=k;i++) sum+=poisson(i,lambda);
+        return Math.min(1,finite(sum));
+    }
+    private static double logChoose(int n,int k) {
+        if(k<0 || k>n) return Double.NEGATIVE_INFINITY;
+        k=Math.min(k,n-k); double sum=0;
+        for(int i=1;i<=k;i++) sum+=Math.log(n-k+i)-Math.log(i);
+        return sum;
+    }
+    public static double hypergeometric(int population,int successes,int draws,int observed) {
+        if(population<=0 || population>100000 || successes<0 || successes>population || draws<0 || draws>population || observed<0 || observed>draws)
+            throw new IllegalArgumentException("Use 0 ≤ successes, draws ≤ population ≤ 100000");
+        return finite(Math.exp(logChoose(successes,observed)+logChoose(population-successes,draws-observed)-logChoose(population,draws)));
     }
     public static long gcd(long a,long b) {
         if(a==Long.MIN_VALUE || b==Long.MIN_VALUE) throw new IllegalArgumentException("Number is too large");

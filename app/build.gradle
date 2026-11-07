@@ -1,5 +1,10 @@
 apply plugin: 'com.android.application'
 
+def admobAppId = providers.gradleProperty('IWAT_ADMOB_APP_ID').orNull
+def admobBannerId = providers.gradleProperty('IWAT_ADMOB_BANNER_ID').orNull
+def testAppId = 'ca-app-pub-3940256099942544~3347511713'
+def testBannerId = 'ca-app-pub-3940256099942544/6300978111'
+
 android {
     namespace 'com.iwat.scientific'
     compileSdk 36
@@ -8,8 +13,22 @@ android {
         applicationId 'com.iwat.scientific'
         minSdk 24
         targetSdk 36
-        versionCode 6
-        versionName '1.5.0'
+        versionCode 7
+        versionName '1.6.0'
+        manifestPlaceholders = [admobAppId: admobAppId ?: testAppId]
+    }
+    buildFeatures { buildConfig true }
+    buildTypes {
+        debug {
+            manifestPlaceholders = [admobAppId: testAppId]
+            buildConfigField 'boolean', 'ADS_ENABLED', 'true'
+            buildConfigField 'String', 'AD_BANNER_ID', "\"${testBannerId}\""
+        }
+        release {
+            manifestPlaceholders = [admobAppId: admobAppId ?: testAppId]
+            buildConfigField 'boolean', 'ADS_ENABLED', admobAppId && admobBannerId ? 'true' : 'false'
+            buildConfigField 'String', 'AD_BANNER_ID', "\"${admobBannerId ?: testBannerId}\""
+        }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -20,6 +39,8 @@ android {
 dependencies {
     implementation 'androidx.core:core:1.12.0'
     implementation 'com.google.mlkit:text-recognition:16.0.1'
+    implementation 'com.google.android.gms:play-services-ads:25.5.0'
+    implementation 'com.google.android.ump:user-messaging-platform:4.0.0'
     testImplementation 'junit:junit:4.13.2'
 }
 

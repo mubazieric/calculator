@@ -20,6 +20,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.WindowInsets;
 import android.text.TextUtils;
+import android.util.Patterns;
 import android.view.inputmethod.InputMethodManager;
 import android.content.Context;
 import android.widget.Button;
@@ -36,6 +37,13 @@ import androidx.core.content.FileProvider;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
+import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.AdSize;
+import com.google.android.gms.ads.AdView;
+import com.google.android.gms.ads.MobileAds;
+import com.google.android.ump.ConsentInformation;
+import com.google.android.ump.ConsentRequestParameters;
+import com.google.android.ump.UserMessagingPlatform;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.File;
@@ -46,7 +54,10 @@ public class MainActivity extends Activity {
     private static final int CARD = 0xff34343e, KEY = 0xff252831, TEAL = 0xffe9bf52, PURPLE = 0xffb899fa;
     private static final int SCREEN = 0xffddebe9, SCREEN_INK = 0xff1c2834, ORANGE = 0xfff09a5b;
     private static final int CAMERA = 4;
-    private LinearLayout root, body, nav, calculatorKeys, memoryStrip;
+    private LinearLayout root, body, nav, calculatorKeys, memoryStrip, adSlot;
+    private ConsentInformation consentInformation;
+    private AdView adView;
+    private boolean adsStarted;
     private EditText input;
     private TextView preview, angleBadge;
     private Uri photo;
@@ -72,6 +83,7 @@ public class MainActivity extends Activity {
             photo = state.getParcelable("photo");
         }
         show(state == null ? "Calculate" : state.getString("screen", "Calculate"));
+        if (BuildConfig.ADS_ENABLED) requestAdConsent();
     }
 
     @Override protected void onSaveInstanceState(Bundle state) {
@@ -83,6 +95,30 @@ public class MainActivity extends Activity {
         state.putBoolean("engineering", engineering);
         state.putParcelable("photo", photo);
         super.onSaveInstanceState(state);
+    }
+    @Override protected void onResume() { super.onResume(); if(adView!=null) adView.resume(); }
+    @Override protected void onPause() { if(adView!=null) adView.pause(); super.onPause(); }
+    @Override protected void onDestroy() { if(adView!=null) { adView.destroy(); adView=null; } super.onDestroy(); }
+
+    private void requestAdConsent() {
+        consentInformation=UserMessagingPlatform.getConsentInformation(this);
+        consentInformation.requestConsentInfoUpdate(this,new ConsentRequestParameters.Builder().build(),()->{
+            UserMessagingPlatform.loadAndShowConsentFormIfRequired(this,error->{ if(consentInformation.canRequestAds()) startAds(); });
+            if(consentInformation.canRequestAds()) startAds();
+        },error->{ if(consentInformation.canRequestAds()) startAds(); });
+    }
+    private void startAds() {
+        if(adsStarted || isFinishing() || isDestroyed()) return;
+        adsStarted=true;
+        new Thread(()->MobileAds.initialize(getApplicationContext(),status->runOnUiThread(()->{
+            if(!isFinishing() && !isDestroyed()) showBanner();
+        }))).start();
+    }
+    private void showBanner() {
+        if(!adsStarted || adSlot==null || adView!=null || !consentInformation.canRequestAds()) return;
+        adView=new AdView(this); adView.setAdSize(AdSize.BANNER); adView.setAdUnitId(BuildConfig.AD_BANNER_ID);
+        adSlot.addView(adView,new LinearLayout.LayoutParams(-2,dp(50)));
+        adView.loadAd(new AdRequest.Builder().build());
     }
 
     private int dp(float n) { return (int)(getResources().getDisplayMetrics().density * n + .5f); }
@@ -113,8 +149,9 @@ public class MainActivity extends Activity {
     private void gap(LinearLayout parent, int height) { View v = new View(this); parent.addView(v, new LinearLayout.LayoutParams(1,dp(height))); }
     private void show(String page) {
         if (input != null && screen.equals("Calculate")) expression = input.getText().toString();
+        if(adView!=null) { adView.destroy(); adView=null; }
         screen = page;
-        calculatorKeys = null; memoryStrip = null;
+        calculatorKeys = null; memoryStrip = null; adSlot=null;
         root = column(); root.setBackground(texture());
         setContentView(root);
         if (Build.VERSION.SDK_INT >= 30) {
@@ -145,7 +182,12 @@ public class MainActivity extends Activity {
             case "Convert": converter(); break;
             case "History": history(); break;
             case "Scan": scan(); break;
+            case "Contact": contact(); break;
             default: calculator();
+        }
+        if(!page.equals("Calculate") && BuildConfig.ADS_ENABLED) {
+            adSlot=row(); adSlot.setGravity(Gravity.CENTER); root.addView(adSlot);
+            if(adsStarted) showBanner();
         }
         navigation();
         if (Build.VERSION.SDK_INT >= 30) root.requestApplyInsets();
@@ -160,14 +202,14 @@ public class MainActivity extends Activity {
         TextView ornament = text("✦",compact?21:27,PURPLE,true); top.addView(ornament);
         if (compact) { gap(body,6); return; }
         gap(body,26);
-        body.addView(text(screen.equals("Calculate") ? "Your pocket laboratory." : screen.equals("Scan") ? "Solve from a photo." : screen.equals("History") ? "Every answer, saved." : "Convert with confidence.",24,INK,true));
+        body.addView(text(screen.equals("Calculate") ? "Your pocket laboratory." : screen.equals("Scan") ? "Solve from a photo." : screen.equals("History") ? "Every answer, saved." : screen.equals("Contact") ? "We'd love to hear from you." : "Convert with confidence.",24,INK,true));
         gap(body,5);
-        body.addView(text(screen.equals("Calculate") ? "Scientific precision, beautifully simple." : screen.equals("Scan") ? "Capture an expression. Check it. Solve it." : screen.equals("History") ? "Tap an entry to calculate it again." : "Everyday units, instant results.",13,MUTED,false));
+        body.addView(text(screen.equals("Calculate") ? "Scientific precision, beautifully simple." : screen.equals("Scan") ? "Capture an expression. Check it. Solve it." : screen.equals("History") ? "Tap an entry to calculate it again." : screen.equals("Contact") ? "Questions, feedback, and suggestions." : "Everyday units, instant results.",13,MUTED,false));
         gap(body,22);
     }
     private void navigation() {
         nav = row(); pad(nav,8,4); nav.setBackgroundColor(0xff1b1c23); root.addView(nav);
-        String[] items = {"Calculate","Convert","History","Scan"}; String[] icons = {"▦","⇄","◷","◎"};
+        String[] items = {"Calculate","Convert","History","Scan","Contact"}; String[] icons = {"▦","⇄","◷","◎","✉"};
         for (int i=0;i<items.length;i++) {
             final String destination = items[i];
             LinearLayout cell=column(); cell.setGravity(Gravity.CENTER);
@@ -360,11 +402,12 @@ public class MainActivity extends Activity {
     }
     private void toolsMenu() {
         String[] choices={"d/dx  ·  Derivative at x","∫  ·  Definite integral","SOLVE  ·  Root in an interval",
-            "STAT  ·  Sum, mean, median, deviation","MATRIX  ·  2×2 / 3×3 operations","VECTOR  ·  Dot, cross, magnitude",
+            "STAT  ·  Sum, mean, median, deviation","MATRIX  ·  2×2 to 6×6 operations","VECTOR  ·  Dot, cross, magnitude",
             "CMPLX  ·  Complex arithmetic","Pol / Rec  ·  Coordinate conversion","GCD / LCM  ·  Integers",
             "ENG  ·  Engineering notation","CONST  ·  Scientific constants","FUNC  ·  Floor, ceil, cot, mod","RAN  ·  Random numbers",
             "LIMIT  ·  Two-sided limit","TABLE  ·  Function values","POLY  ·  Quadratic roots",
-            "SIMUL  ·  Linear equations","DIST  ·  Probability","BASE  ·  BIN / OCT / DEC / HEX"};
+            "SIMUL  ·  Linear equations","DIST  ·  Probability","BASE  ·  BIN / OCT / DEC / HEX",
+            "SYMBOLIC  ·  Polynomial derivative","SYMBOLIC  ·  Polynomial integral"};
         menu("SCIENTIFIC TOOLS",choices,index->{
             String formula=input.getText().toString().trim(); if(formula.isEmpty()) formula="x^2";
             String initial=formula;
@@ -408,12 +451,14 @@ public class MainActivity extends Activity {
                 case 15: prompt("QUADRATIC  ax²+bx+c=0",new String[]{"a","b","c"},new String[]{"1","-3","2"},v->infoDialog("QUADRATIC ROOTS",AdvancedMath.quadratic(numeric(v[0]),numeric(v[1]),numeric(v[2])))); break;
                 case 16: prompt("SIMULTANEOUS EQUATIONS",new String[]{"COEFFICIENTS (ROWS SEPARATED BY ;)","RESULTS (SEPARATED BY ,)"},new String[]{"2, 1; 1, -1","5, 1"},v->{
                     double[] solution=AdvancedMath.linearSystem(matrix(v[0]),numbers(v[1]));
-                    StringBuilder output=new StringBuilder(); String[] names={"x","y","z"};
+                    StringBuilder output=new StringBuilder(); String[] names={"x","y","z","u","v","w"};
                     for(int i=0;i<solution.length;i++) output.append(names[i]).append(" = ").append(Expression.format(solution[i])).append('\n');
                     infoDialog("UNIQUE SOLUTION",output.toString());
                 }); break;
                 case 17: distributionMenu(); break;
                 case 18: basePrompt(); break;
+                case 19: prompt("SYMBOLIC DERIVATIVE",new String[]{"POLYNOMIAL IN x (UP TO DEGREE 8)"},new String[]{"3x^2-4x+1"},v->infoDialog("d/dx",Polynomial.differentiate(v[0]))); break;
+                case 20: prompt("SYMBOLIC ANTIDERIVATIVE",new String[]{"POLYNOMIAL IN x (UP TO DEGREE 8)"},new String[]{"3x^2-4x+1"},v->infoDialog("∫ f(x) dx",Polynomial.integrate(v[0]))); break;
             }
         });
     }
@@ -426,7 +471,7 @@ public class MainActivity extends Activity {
         String[] rows=raw.split(";"); double[][] values=new double[rows.length][];
         for(int i=0;i<rows.length;i++) values[i]=numbers(rows[i]);
         // Validate dimensions before any operation, including linear systems.
-        if(rows.length<2 || rows.length>3) throw new IllegalArgumentException("Enter 2 or 3 rows separated by semicolons");
+        if(rows.length<2 || rows.length>6) throw new IllegalArgumentException("Enter 2 to 6 rows separated by semicolons");
         for(double[] row:values) if(row.length!=rows.length) throw new IllegalArgumentException("Each row needs "+rows.length+" entries");
         return values;
     }
@@ -440,7 +485,7 @@ public class MainActivity extends Activity {
         return result.toString();
     }
     private void matrixMenu() {
-        menu("MATRIX  ·  2×2 / 3×3",new String[]{"Determinant","Inverse","Multiply A × B"},index->{
+        menu("MATRIX  ·  2×2 TO 6×6",new String[]{"Determinant","Inverse","Multiply A × B"},index->{
             String[] labels=index==2?new String[]{"MATRIX A (ROWS SEPARATED BY ;)","MATRIX B (ROWS SEPARATED BY ;)"}:new String[]{"MATRIX (ROWS SEPARATED BY ;)"};
             String[] defaults=index==2?new String[]{"1, 2; 3, 4","5, 6; 7, 8"}:new String[]{"1, 2; 3, 4"};
             prompt("MATRIX  ·  "+new String[]{"DETERMINANT","INVERSE","MULTIPLY"}[index],labels,defaults,v->{
@@ -466,11 +511,15 @@ public class MainActivity extends Activity {
         });
     }
     private void distributionMenu() {
-        menu("PROBABILITY DISTRIBUTIONS",new String[]{"Normal PDF  ·  f(x)","Normal CDF  ·  P(X ≤ x)","Binomial PMF  ·  P(X = k)","Poisson PMF  ·  P(X = k)"},index->{
+        menu("PROBABILITY DISTRIBUTIONS",new String[]{"Normal PDF  ·  f(x)","Normal CDF  ·  P(X ≤ x)","Binomial PMF  ·  P(X = k)","Poisson PMF  ·  P(X = k)",
+            "Binomial CDF  ·  P(X ≤ k)","Poisson CDF  ·  P(X ≤ k)","Hypergeometric PMF"},index->{
             if(index<2) prompt(index==0?"NORMAL PDF":"NORMAL CDF",new String[]{"x","MEAN  μ","STANDARD DEVIATION  σ"},new String[]{"0","0","1"},v->publish(index==0?"Normal PDF":"Normal CDF",index==0?
                 AdvancedMath.normalPdf(numeric(v[0]),numeric(v[1]),numeric(v[2])):AdvancedMath.normalCdf(numeric(v[0]),numeric(v[1]),numeric(v[2]))));
             else if(index==2) prompt("BINOMIAL PMF",new String[]{"NUMBER OF TRIALS  n","SUCCESSES  k","SUCCESS PROBABILITY  p"},new String[]{"4","2","0.5"},v->publish("Binomial P(X=k)",AdvancedMath.binomial(nonnegativeInt(v[0]),nonnegativeInt(v[1]),numeric(v[2]))));
-            else prompt("POISSON PMF",new String[]{"EVENTS  k","AVERAGE RATE  λ"},new String[]{"2","3"},v->publish("Poisson P(X=k)",AdvancedMath.poisson(nonnegativeInt(v[0]),numeric(v[1]))));
+            else if(index==3) prompt("POISSON PMF",new String[]{"EVENTS  k","AVERAGE RATE  λ"},new String[]{"2","3"},v->publish("Poisson P(X=k)",AdvancedMath.poisson(nonnegativeInt(v[0]),numeric(v[1]))));
+            else if(index==4) prompt("BINOMIAL CDF",new String[]{"TRIALS  n","UP TO  k","PROBABILITY  p"},new String[]{"4","2","0.5"},v->publish("Binomial P(X≤k)",AdvancedMath.binomialCdf(nonnegativeInt(v[0]),nonnegativeInt(v[1]),numeric(v[2]))));
+            else if(index==5) prompt("POISSON CDF",new String[]{"UP TO  k","AVERAGE RATE  λ"},new String[]{"2","3"},v->publish("Poisson P(X≤k)",AdvancedMath.poissonCdf(nonnegativeInt(v[0]),numeric(v[1]))));
+            else prompt("HYPERGEOMETRIC PMF",new String[]{"POPULATION  N","SUCCESSES IN POPULATION  K","DRAWS  n","OBSERVED SUCCESSES  k"},new String[]{"8","4","4","2"},v->publish("Hypergeometric P(X=k)",AdvancedMath.hypergeometric(nonnegativeInt(v[0]),nonnegativeInt(v[1]),nonnegativeInt(v[2]),nonnegativeInt(v[3]))));
         });
     }
     private void basePrompt() {
@@ -605,6 +654,60 @@ public class MainActivity extends Activity {
     private android.widget.AdapterView.OnItemSelectedListener listener(Runnable action) { return new android.widget.AdapterView.OnItemSelectedListener() {
         public void onItemSelected(android.widget.AdapterView<?> parent,View view,int position,long id){action.run();}
         public void onNothingSelected(android.widget.AdapterView<?> parent){} }; }
+
+    private EditText contactField(LinearLayout parent,String label,String hint,boolean multiline) {
+        parent.addView(text(label,11,PURPLE,true)); gap(parent,8);
+        EditText field=new EditText(this); field.setHint(hint); field.setHintTextColor(MUTED);
+        field.setTextColor(INK); field.setTextSize(16); field.setBackground(shape(KEY,13)); pad(field,14,11);
+        if(multiline) { field.setMinLines(5); field.setGravity(Gravity.TOP); field.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE|android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES); }
+        else field.setSingleLine(true);
+        parent.addView(field,new LinearLayout.LayoutParams(-1,multiline?-2:dp(52))); gap(parent,17);
+        return field;
+    }
+    private void contact() {
+        LinearLayout card=column(); pad(card,18,21); card.setBackground(gradient(0xff242332,0xff1e242c,20)); body.addView(card);
+        card.addView(text("CONTACT THE DEVELOPER",12,TEAL,true)); gap(card,7);
+        card.addView(text("Your message will open in your email app for review before sending.",13,MUTED,false)); gap(card,20);
+        EditText name=contactField(card,"YOUR NAME","Name",false);
+        EditText email=contactField(card,"EMAIL ADDRESS","you@example.com",false);
+        email.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        EditText subject=contactField(card,"SUBJECT","Feedback about IWAT",false);
+        EditText message=contactField(card,"YOUR MESSAGE","Tell us what you think…",true);
+        Button send=new Button(this); send.setText(R.string.open_email_to_send); send.setAllCaps(false);
+        send.setTextColor(BG); send.setTextSize(14); send.setBackground(gradient(TEAL,0xffffdc7d,13));
+        card.addView(send,new LinearLayout.LayoutParams(-1,dp(52)));
+        send.setOnClickListener(v->{
+            String sender=name.getText().toString().trim(),address=email.getText().toString().trim();
+            String title=subject.getText().toString().trim(),bodyText=message.getText().toString().trim();
+            if(sender.isEmpty()) { name.setError("Enter your name"); return; }
+            if(!Patterns.EMAIL_ADDRESS.matcher(address).matches()) { email.setError("Enter a valid email"); return; }
+            if(title.isEmpty()) { subject.setError("Enter a subject"); return; }
+            if(bodyText.isEmpty()) { message.setError("Enter your message"); return; }
+            Intent intent=new Intent(Intent.ACTION_SENDTO,Uri.parse("mailto:ericmubazi2010@gmail.com"));
+            intent.putExtra(Intent.EXTRA_SUBJECT,"IWAT: "+title);
+            intent.putExtra(Intent.EXTRA_TEXT,"From: "+sender+"\nReply to: "+address+"\n\n"+bodyText);
+            try { startActivity(Intent.createChooser(intent,"Send with an email app")); }
+            catch(ActivityNotFoundException e) { message("No email app found. Write to ericmubazi2010@gmail.com"); }
+        });
+        gap(body,18);
+        body.addView(text("✉  ericmubazi2010@gmail.com",15,PURPLE,true)); gap(body,10);
+        body.addView(text("Your form is not uploaded by IWAT. Sending requires your email app and your confirmation. Optional ads may use Google services after consent.",12,MUTED,false));
+        gap(body,16);
+        TextView notice=text("READ PRIVACY NOTICE  ↗",12,PURPLE,true); body.addView(notice);
+        notice.setOnClickListener(v->{
+            try { startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/mubazieric/calculator/blob/main/PRIVACY.md"))); }
+            catch(ActivityNotFoundException e) { message("No browser found"); }
+        });
+        if(BuildConfig.ADS_ENABLED) {
+            gap(body,18);
+            TextView privacy=text("AD PRIVACY OPTIONS  ↗",12,TEAL,true); body.addView(privacy);
+            privacy.setOnClickListener(v->{
+                if(consentInformation!=null && consentInformation.getPrivacyOptionsRequirementStatus()==ConsentInformation.PrivacyOptionsRequirementStatus.REQUIRED)
+                    UserMessagingPlatform.showPrivacyOptionsForm(this,error->{ if(error!=null) message("Privacy settings unavailable right now"); });
+                else message("Ad privacy options are not required for this device");
+            });
+        }
+    }
 
     private void scan() {
         LinearLayout panel=column(); pad(panel,22,28); panel.setGravity(Gravity.CENTER); panel.setBackground(gradient(0xff1e3d4d,0xff272449,24)); body.addView(panel);
