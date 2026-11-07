@@ -1,10 +1,12 @@
 # IWAT Scientific Calculator
 
-Native Android scientific calculator with a dark, custom-designed interface. Source repository: [mubazieric/calculator](https://github.com/mubazieric/calculator).
+Native Android scientific calculator with a textured charcoal keypad, lavender function controls, amber accents and a high-contrast display. Source repository: [mubazieric/calculator](https://github.com/mubazieric/calculator).
 
 ## Features
 
 - Scientific arithmetic: precedence, parentheses, powers and roots, fractions as division, factorial, permutations/combinations, constants π and e, inverse and hyperbolic trig, logs, absolute value, scientific notation, DEG/RAD and answer recall.
+- MODE tools: numerical derivative and definite integral, bracketed equation solver, descriptive statistics, 2×2 matrix determinant/inverse, vector dot product, complex +/−/×/÷, polar/rectangular conversion, GCD/LCM, floor/ceil/mod/cot, random values and scientific constants. Numeric calculus uses `x` as the variable and evaluates expressions locally.
+- Decimal/fraction display toggle, engineering notation, optional advanced keypad layer and separate memory controls.
 - Calculator display and keypad fit the screen without scrolling in portrait. Tap **2nd** to access inverse/advanced scientific functions and **1st** to return; converter, history and scan remain scrollable where needed.
 - Memory controls (M+, M−, MR, MC), live preview and locally saved calculation history.
 - Dedicated converter: length, mass, temperature, area, volume, time, speed and data.
@@ -18,6 +20,6 @@ Run `gradlew.bat :app:testDebugUnitTest :app:lintDebug` (or `./gradlew` on macOS
 
 ## Scope notes
 
-This is a working first release of the scientific arithmetic functions, not a complete hardware fx-991 emulator: matrix/vector algebra, complex-number mode, equation solving, statistics and programmable tables are not yet implemented. Photo recognition works best for clear printed expressions; it may misread handwriting or multi-line problems. Always review extracted text before solving. No cloud generative-AI service is included; ML Kit provides on-device machine-learning OCR.
+This is not a complete hardware fx-991 emulator. Calculus is numerical (not symbolic); matrix support is limited to 2×2 inverse/determinant, vectors to dot products, and statistics to descriptive measures. Distribution tables, general matrix/vector solvers, programmable tables and arbitrary complex-expression parsing are not yet implemented. Photo recognition works best for clear printed expressions; it may misread handwriting or multi-line problems. Always review extracted text before solving. No cloud generative-AI service is included; ML Kit provides on-device machine-learning OCR.
 
 The arithmetic engine rejects undefined results and limits factorial/permutation inputs to nonnegative integers up to 170. History and memory are stored only on the device.

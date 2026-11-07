@@ -1,12 +1,17 @@
 package com.iwat.scientific;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.ClipData;
 import android.content.ActivityNotFoundException;
 import android.graphics.Color;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.PixelFormat;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Build;
@@ -24,6 +29,7 @@ import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.ArrayAdapter;
 import android.widget.TextView;
+import android.widget.Toast;
 import android.text.TextWatcher;
 import android.text.Editable;
 import androidx.core.content.FileProvider;
@@ -33,10 +39,12 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.File;
+import java.util.Locale;
 
 public class MainActivity extends Activity {
-    private static final int INK = 0xffe8efff, MUTED = 0xff9ba9c1, BG = 0xff0b1220;
-    private static final int CARD = 0xff172238, KEY = 0xff202e46, TEAL = 0xff62e0c8, PURPLE = 0xffad9fff;
+    private static final int INK = 0xfff1f0f5, MUTED = 0xffa3a4b0, BG = 0xff101116;
+    private static final int CARD = 0xff34343e, KEY = 0xff252831, TEAL = 0xffe9bf52, PURPLE = 0xffb899fa;
+    private static final int SCREEN = 0xffddebe9, SCREEN_INK = 0xff1c2834, ORANGE = 0xfff09a5b;
     private static final int CAMERA = 4;
     private LinearLayout root, body, nav, calculatorKeys, memoryStrip;
     private EditText input;
@@ -44,6 +52,7 @@ public class MainActivity extends Activity {
     private Uri photo;
     private boolean degrees = true;
     private boolean secondLayer = false;
+    private boolean engineering = false;
     private double answer = 0, memory = 0;
     private String expression = "", screen = "Calculate";
     private JSONArray history = new JSONArray();
@@ -59,6 +68,7 @@ public class MainActivity extends Activity {
             expression = state.getString("expression", "");
             answer = state.getDouble("answer", 0);
             secondLayer = state.getBoolean("secondLayer", false);
+            engineering = state.getBoolean("engineering", false);
             photo = state.getParcelable("photo");
         }
         show(state == null ? "Calculate" : state.getString("screen", "Calculate"));
@@ -70,6 +80,7 @@ public class MainActivity extends Activity {
         state.putString("screen", screen);
         state.putDouble("answer", answer);
         state.putBoolean("secondLayer", secondLayer);
+        state.putBoolean("engineering", engineering);
         state.putParcelable("photo", photo);
         super.onSaveInstanceState(state);
     }
@@ -77,6 +88,20 @@ public class MainActivity extends Activity {
     private int dp(float n) { return (int)(getResources().getDisplayMetrics().density * n + .5f); }
     private GradientDrawable shape(int color, int radius) { GradientDrawable d = new GradientDrawable(); d.setColor(color); d.setCornerRadius(dp(radius)); return d; }
     private GradientDrawable gradient(int a, int b, int radius) { GradientDrawable d = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{a,b}); d.setCornerRadius(dp(radius)); return d; }
+    private Drawable texture() {
+        return new Drawable() {
+            final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
+            @Override public void draw(Canvas canvas) {
+                canvas.drawColor(BG); paint.setColor(0xff25262d);
+                int step=dp(9), width=getBounds().width(), height=getBounds().height();
+                for(int y=0;y<height;y+=step) for(int x=0;x<width;x+=step)
+                    canvas.drawCircle(x+((y/step)%2)*step/2f,y,dp(.65f),paint);
+            }
+            @Override public void setAlpha(int alpha) { }
+            @Override public void setColorFilter(android.graphics.ColorFilter filter) { }
+            @Override public int getOpacity() { return PixelFormat.OPAQUE; }
+        };
+    }
     private TextView text(String value, int size, int color, boolean bold) {
         TextView t = new TextView(this); t.setText(value); t.setTextColor(color); t.setTextSize(size);
         if (bold) t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -90,7 +115,7 @@ public class MainActivity extends Activity {
         if (input != null && screen.equals("Calculate")) expression = input.getText().toString();
         screen = page;
         calculatorKeys = null; memoryStrip = null;
-        root = column(); root.setBackgroundColor(BG);
+        root = column(); root.setBackground(texture());
         setContentView(root);
         if (Build.VERSION.SDK_INT >= 30) {
             root.setOnApplyWindowInsetsListener((view, insets) -> {
@@ -129,9 +154,9 @@ public class MainActivity extends Activity {
         LinearLayout top = row(); body.addView(top);
         boolean compact = screen.equals("Calculate");
         TextView mark = text("∑",compact?20:24,BG,true); mark.setGravity(Gravity.CENTER);
-        mark.setBackground(gradient(TEAL,0xff7cb7ee,12)); top.addView(mark,new LinearLayout.LayoutParams(dp(compact?38:50),dp(compact?38:50)));
+        mark.setBackground(gradient(PURPLE,0xffe8c9ff,12)); top.addView(mark,new LinearLayout.LayoutParams(dp(compact?38:50),dp(compact?38:50)));
         LinearLayout titles = column(); titles.setPadding(dp(10),0,0,0); top.addView(titles,new LinearLayout.LayoutParams(0,-2,1));
-        titles.addView(text("IWAT",compact?17:21,INK,true)); titles.addView(text("SCIENTIFIC CALCULATOR",compact?9:10,TEAL,true));
+        titles.addView(text("IWAT",compact?17:21,INK,true)); titles.addView(text("SCIENTIFIC CALCULATOR",compact?9:10,PURPLE,true));
         TextView ornament = text("✦",compact?21:27,PURPLE,true); top.addView(ornament);
         if (compact) { gap(body,6); return; }
         gap(body,26);
@@ -141,30 +166,38 @@ public class MainActivity extends Activity {
         gap(body,22);
     }
     private void navigation() {
-        nav = row(); pad(nav,8,4); nav.setBackgroundColor(0xff111c2e); root.addView(nav);
+        nav = row(); pad(nav,8,4); nav.setBackgroundColor(0xff1b1c23); root.addView(nav);
         String[] items = {"Calculate","Convert","History","Scan"}; String[] icons = {"▦","⇄","◷","◎"};
         for (int i=0;i<items.length;i++) {
             final String destination = items[i];
             LinearLayout cell=column(); cell.setGravity(Gravity.CENTER);
-            if (screen.equals(destination)) cell.setBackground(shape(0xff20384a,16));
-            TextView symbol=text(icons[i],20,screen.equals(destination)?TEAL:MUTED,true); symbol.setGravity(Gravity.CENTER); cell.addView(symbol);
-            TextView label=text(destination,10,screen.equals(destination)?TEAL:MUTED,true); label.setGravity(Gravity.CENTER); cell.addView(label);
+            if (screen.equals(destination)) cell.setBackground(shape(0xff3a334b,16));
+            TextView symbol=text(icons[i],20,screen.equals(destination)?PURPLE:MUTED,true); symbol.setGravity(Gravity.CENTER); cell.addView(symbol);
+            TextView label=text(destination,10,screen.equals(destination)?PURPLE:MUTED,true); label.setGravity(Gravity.CENTER); cell.addView(label);
             nav.addView(cell,new LinearLayout.LayoutParams(0,dp(48),1)); cell.setOnClickListener(v->show(destination));
         }
     }
     private void calculator() {
-        LinearLayout display=column(); pad(display,14,9); display.setBackground(gradient(0xff1c3446,0xff19223e,18));
-        body.addView(display,new LinearLayout.LayoutParams(-1,dp(111)));
-        LinearLayout flags=row(); display.addView(flags);
+        LinearLayout flags=row(); body.addView(flags);
         angleBadge=text(degrees?"● DEG":"● RAD",11,TEAL,true); flags.addView(angleBadge,new LinearLayout.LayoutParams(0,-2,1));
-        TextView mode=text(secondLayer?"SCIENTIFIC  •  2ND":"SCIENTIFIC  •  1ST",10,secondLayer?PURPLE:MUTED,true); flags.addView(mode);
+        TextView mode=text((secondLayer?"2ND":"1ST")+"   MATH   •   NORM",10,secondLayer?PURPLE:MUTED,true); flags.addView(mode);
+        gap(body,6);
+        LinearLayout frame=row(); frame.setBackground(gradient(SCREEN,0xffd1e1e0,18));
+        int screenHeight=(int)(getResources().getDisplayMetrics().heightPixels/getResources().getDisplayMetrics().density);
+        body.addView(frame,new LinearLayout.LayoutParams(-1,dp(Math.max(108,Math.min(158,screenHeight*.19f)))));
+        View stripe=new View(this); stripe.setBackground(gradient(PURPLE,0xff765cf4,3));
+        LinearLayout.LayoutParams stripeParams=new LinearLayout.LayoutParams(dp(4),-1); stripeParams.setMargins(dp(8),dp(12),0,dp(12)); frame.addView(stripe,stripeParams);
+        LinearLayout display=column(); display.setPadding(dp(12),dp(10),dp(16),dp(9)); frame.addView(display,new LinearLayout.LayoutParams(0,-1,1));
+        LinearLayout displayTop=row(); display.addView(displayTop);
+        displayTop.addView(text("IWAT  /  SCIENTIFIC",10,0xff546671,true),new LinearLayout.LayoutParams(0,-2,1));
+        TextView menu=text("⋮",25,SCREEN_INK,true); menu.setGravity(Gravity.CENTER); displayTop.addView(menu,new LinearLayout.LayoutParams(dp(28),dp(28))); menu.setOnClickListener(v->toolsMenu());
         input=new EditText(this); input.setSingleLine(false); input.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
-        input.setTextSize(22); input.setTextColor(INK); input.setHintTextColor(MUTED); input.setHint("0");
+        input.setTextSize(24); input.setTextColor(SCREEN_INK); input.setHintTextColor(0xff778b90); input.setHint("0");
         input.setBackgroundColor(Color.TRANSPARENT); input.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         display.addView(input,new LinearLayout.LayoutParams(-1,0,1)); input.setText(expression); input.setSelection(input.length());
-        preview=text("= 0",24,TEAL,true); preview.setSingleLine(true); preview.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
+        preview=text("= 0",28,0xff59479b,true); preview.setSingleLine(true); preview.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
         preview.setEllipsize(TextUtils.TruncateAt.START);
-        display.addView(preview,new LinearLayout.LayoutParams(-1,dp(28)));
+        display.addView(preview,new LinearLayout.LayoutParams(-1,dp(35)));
         input.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s,int start,int count,int after) { }
             public void onTextChanged(CharSequence s,int start,int before,int count) {
@@ -173,14 +206,15 @@ public class MainActivity extends Activity {
             public void afterTextChanged(Editable e) { }
         });
         updatePreview(expression);
-        gap(body,6);
+        gap(body,7);
         LinearLayout strip=row(); memoryStrip=strip; body.addView(strip);
-        small(strip,degrees?"DEG":"RAD",()->{ degrees=!degrees; getPreferences(0).edit().putBoolean("degrees",degrees).apply(); angleBadge.setText(degrees?"● DEG":"● RAD"); show("Calculate"); });
-        small(strip,"M+",()->{ memory+=current(); saveMemory(); });
-        small(strip,"M−",()->{ memory-=current(); saveMemory(); });
-        small(strip,"MR",()->insert(Expression.format(memory)));
-        small(strip,"MC",()->{ memory=0; saveMemory(); });
-        gap(body,5);
+        small(strip,"MODE",()->toolsMenu());
+        small(strip,"SOLVE",()->solvePrompt());
+        small(strip,"CONST",()->constantsMenu());
+        small(strip,"S⇔D",()->fractionDisplay());
+        small(strip,"MEM",()->memoryMenu());
+        small(strip,degrees?"DEG":"RAD",()->{ degrees=!degrees; getPreferences(0).edit().putBoolean("degrees",degrees).apply(); show("Calculate"); });
+        gap(body,6);
         LinearLayout keypad=column(); calculatorKeys=keypad; body.addView(keypad,new LinearLayout.LayoutParams(-1,0,1));
         String[][] scientific=secondLayer
             ? new String[][]{{"asin(","acos(","atan(","sinh(","cosh("},{"tanh(","abs(","∛(","eˣ","10ˣ"},{"n√","π","e","Ans","1st"}}
@@ -192,23 +226,31 @@ public class MainActivity extends Activity {
         body.setFocusableInTouchMode(true); body.requestFocus();
     }
     private void updatePreview(String value) {
-        try { preview.setText(getString(R.string.result_format, Expression.format(new Expression(value,degrees,answer).evaluate()))); preview.setTextColor(TEAL); }
+        try { preview.setText(getString(R.string.result_format, formatResult(new Expression(value,degrees,answer).evaluate()))); preview.setTextColor(0xff59479b); }
         catch(Exception e) { preview.setText(value.isEmpty()?"= 0":"…"); preview.setTextColor(MUTED); }
+    }
+    private String formatResult(double value) {
+        if (!engineering || value==0) return Expression.format(value);
+        int exponent=(int)Math.floor(Math.log10(Math.abs(value))/3)*3;
+        return Expression.format(value/Math.pow(10,exponent))+"E"+exponent;
     }
     private void saveMemory() { getPreferences(0).edit().putLong("memory",Double.doubleToRawLongBits(memory)).apply(); }
     private double current() { try { return new Expression(input.getText().toString(),degrees,answer).evaluate(); } catch(Exception e) { return answer; } }
     private void small(LinearLayout parent,String label,Runnable action) {
-        TextView button=text(label,11,TEAL,true); button.setGravity(Gravity.CENTER); button.setBackground(shape(CARD,12));
-        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(30),1); p.setMargins(dp(2),0,dp(2),0); parent.addView(button,p); button.setOnClickListener(v->action.run());
+        TextView button=text(label,label.length()>4?10:12,INK,true); button.setGravity(Gravity.CENTER); button.setBackground(shape(CARD,14));
+        button.setSingleLine(true); button.setIncludeFontPadding(false);
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(42),1); p.setMargins(dp(2),0,dp(2),0); parent.addView(button,p); button.setOnClickListener(v->action.run());
     }
     private void keyRow(LinearLayout keypad,String[] keys,boolean science) {
         LinearLayout line=row(); keypad.addView(line,new LinearLayout.LayoutParams(-1,0,1));
         for(String key:keys) {
             boolean equals=key.equals("=");
             boolean layer=key.equals("2nd") || key.equals("1st");
-            TextView button=text(key,science?14:18,equals?BG:(layer?BG:(science?0xffc9c4ff:INK)),true); button.setGravity(Gravity.CENTER);
+            boolean warm=key.equals("AC") || key.equals("⌫");
+            boolean operation=key.equals("+") || key.equals("−") || key.equals("×") || key.equals("÷");
+            TextView button=text(key,science?14:18,(equals||warm||layer)?BG:(science?PURPLE:INK),true); button.setGravity(Gravity.CENTER);
             button.setIncludeFontPadding(false); button.setSingleLine(true);
-            button.setBackground(equals?gradient(TEAL,0xff72cfe8,10):(layer?gradient(PURPLE,0xff8e9bfa,10):shape(science?CARD:KEY,10)));
+            button.setBackground(equals?gradient(TEAL,0xffffdf7d,12):(warm?gradient(ORANGE,0xfff7ad6e,12):(layer?gradient(PURPLE,0xffd0aaff,12):shape(science?CARD:(operation?0xff43444e:KEY),12))));
             LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,-1,1); p.setMargins(dp(2),dp(1),dp(2),dp(1)); line.addView(button,p);
             button.setOnClickListener(v->press(key));
         }
@@ -242,13 +284,175 @@ public class MainActivity extends Activity {
         String query=input.getText().toString().trim();
         try {
             double result=new Expression(query,degrees,answer).evaluate();
-            String formatted=Expression.format(result); answer=result;
-            preview.setText(getString(R.string.result_format, formatted)); preview.setTextColor(TEAL);
-            JSONObject entry=new JSONObject(); entry.put("expression",query); entry.put("result",formatted); entry.put("mode",degrees?"DEG":"RAD");
-            JSONArray next=new JSONArray(); next.put(entry); for(int i=0;i<Math.min(99,history.length());i++) next.put(history.get(i));
-            history=next; getPreferences(0).edit().putString("history",history.toString()).apply();
+            String formatted=formatResult(result); answer=result;
+            preview.setText(getString(R.string.result_format, formatted)); preview.setTextColor(0xff59479b);
+            saveHistory(query,formatted,query);
             ((InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(input.getWindowToken(),0);
         } catch(Exception e) { preview.setText(e.getMessage()); preview.setTextColor(0xffffa6a6); }
+    }
+    private void saveHistory(String label,String result,String replay) throws Exception {
+        JSONObject entry=new JSONObject(); entry.put("expression",label); entry.put("result",result);
+        entry.put("replay",replay); entry.put("mode",degrees?"DEG":"RAD");
+        JSONArray next=new JSONArray(); next.put(entry); for(int i=0;i<Math.min(99,history.length());i++) next.put(history.get(i));
+        history=next; getPreferences(0).edit().putString("history",history.toString()).apply();
+    }
+    private void resultDialog(String label,String value) {
+        TextView detail=text(value,23,PURPLE,true); pad(detail,22,20);
+        AlertDialog dialog=new AlertDialog.Builder(this).setView(detail)
+            .setPositiveButton("USE RESULT",(d,w)->{ input.setText(value); input.setSelection(input.length()); })
+            .setNegativeButton("CLOSE",null).create(); openDialog(dialog,label);
+    }
+    private void infoDialog(String label,String detail) {
+        TextView content=text(detail,17,INK,false); pad(content,22,18);
+        AlertDialog dialog=new AlertDialog.Builder(this).setView(content).setPositiveButton("DONE",null).create();
+        openDialog(dialog,label);
+    }
+    private void publish(String label,double result) {
+        AdvancedMath.finite(result);
+        String value=formatResult(result); answer=result;
+        try { saveHistory(label,value,Expression.format(result)); } catch(Exception e) { message("Unable to save result"); }
+        updatePreview(input.getText().toString());
+        resultDialog(label,value);
+    }
+    private void menu(String title,String[] choices,java.util.function.IntConsumer action) {
+        LinearLayout content=column(); pad(content,18,10);
+        ScrollView scroll=new ScrollView(this); scroll.addView(content);
+        AlertDialog dialog=new AlertDialog.Builder(this).setView(scroll).create();
+        for(int i=0;i<choices.length;i++) {
+            final int selected=i;
+            TextView option=text(choices[i],16,INK,true); pad(option,15,13); option.setBackground(shape(i%2==0?KEY:CARD,12));
+            LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2); params.bottomMargin=dp(5); content.addView(option,params);
+            option.setOnClickListener(v->{ dialog.dismiss(); action.accept(selected); });
+        }
+        openDialog(dialog,title);
+    }
+    private void openDialog(AlertDialog dialog,String title) {
+        TextView heading=text(title,20,INK,true); pad(heading,22,18); dialog.setCustomTitle(heading);
+        dialog.show(); dialog.getWindow().setBackgroundDrawable(shape(0xff20222b,20));
+        dialog.getWindow().setLayout(getResources().getDisplayMetrics().widthPixels-dp(36),-2);
+        if(dialog.getButton(AlertDialog.BUTTON_POSITIVE)!=null) dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(PURPLE);
+        if(dialog.getButton(AlertDialog.BUTTON_NEGATIVE)!=null) dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(MUTED);
+    }
+    private interface ToolAction { void run(String[] values); }
+    private void prompt(String title,String[] labels,String[] defaults,ToolAction action) {
+        ScrollView scroll=new ScrollView(this); LinearLayout content=column(); pad(content,20,12); scroll.addView(content);
+        EditText[] fields=new EditText[labels.length];
+        for(int i=0;i<labels.length;i++) {
+            content.addView(text(labels[i],12,PURPLE,true)); gap(content,5);
+            EditText field=new EditText(this); field.setText(defaults[i]); field.setSingleLine(true);
+            field.setSelectAllOnFocus(true); field.setTextColor(INK); field.setTextSize(17);
+            field.setHintTextColor(MUTED); field.setBackground(shape(KEY,11)); pad(field,12,9);
+            content.addView(field,new LinearLayout.LayoutParams(-1,dp(49))); gap(content,14); fields[i]=field;
+        }
+        AlertDialog dialog=new AlertDialog.Builder(this).setView(scroll).setPositiveButton("CALCULATE",null).setNegativeButton("CANCEL",null).create();
+        openDialog(dialog,title);
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            String[] values=new String[fields.length]; for(int i=0;i<fields.length;i++) values[i]=fields[i].getText().toString().trim();
+            try { action.run(values); dialog.dismiss(); }
+            catch(Exception e) { message(e.getMessage()==null?"Check the input":e.getMessage()); }
+        });
+    }
+    private double numeric(String value) { return new Expression(value,degrees,answer).evaluate(); }
+    private double[] numbers(String csv) {
+        String[] parts=csv.split(","); double[] values=new double[parts.length];
+        for(int i=0;i<parts.length;i++) values[i]=numeric(parts[i].trim()); return values;
+    }
+    private void toolsMenu() {
+        String[] choices={"d/dx  ·  Derivative at x","∫  ·  Definite integral","SOLVE  ·  Root in an interval",
+            "STAT  ·  Sum, mean, median, deviation","MATRIX  ·  2×2 determinant / inverse","VECTOR  ·  Dot product",
+            "CMPLX  ·  Complex arithmetic","Pol / Rec  ·  Coordinate conversion","GCD / LCM  ·  Integers",
+            "ENG  ·  Engineering notation","CONST  ·  Scientific constants","FUNC  ·  Floor, ceil, cot, mod","RAN  ·  Random numbers"};
+        menu("SCIENTIFIC TOOLS",choices,index->{
+            String formula=input.getText().toString().trim(); if(formula.isEmpty()) formula="x^2";
+            String initial=formula;
+            switch(index) {
+                case 0: prompt("DERIVATIVE",new String[]{"f(x)","AT x"},new String[]{initial,"1"},v->publish("d/dx " + v[0] + " @ " + v[1],AdvancedMath.derivative(v[0],numeric(v[1]),degrees))); break;
+                case 1: prompt("DEFINITE INTEGRAL",new String[]{"f(x)","LOWER BOUND","UPPER BOUND"},new String[]{initial,"0","1"},v->publish("∫ " + v[0] + " ["+v[1]+","+v[2]+"]",AdvancedMath.integral(v[0],numeric(v[1]),numeric(v[2]),degrees))); break;
+                case 2: solvePrompt(); break;
+                case 3: prompt("STATISTICS",new String[]{"VALUES, SEPARATED BY COMMAS"},new String[]{"1, 2, 3, 4"},v->{ double[] stats=AdvancedMath.statistics(numbers(v[0]));
+                    infoDialog("STATISTICS", "n = " + numbers(v[0]).length + "\nΣ = " + Expression.format(stats[0]) + "\nMean = " + Expression.format(stats[1]) + "\nMedian = " + Expression.format(stats[2]) + "\nσ = " + Expression.format(stats[3]));
+                    try { saveHistory("STAT mean: " + v[0],Expression.format(stats[1]),Expression.format(stats[1])); } catch(Exception ignored) { }
+                }); break;
+                case 4: prompt("MATRIX 2×2",new String[]{"TOP LEFT (a)","TOP RIGHT (b)","BOTTOM LEFT (c)","BOTTOM RIGHT (d)"},new String[]{"1","2","3","4"},v->{ double a=numeric(v[0]),b=numeric(v[1]),c=numeric(v[2]),d=numeric(v[3]); double det=AdvancedMath.determinant(a,b,c,d);
+                    String detail="det(A) = "+Expression.format(det);
+                    try { double[] inv=AdvancedMath.inverse(a,b,c,d); detail+="\nA⁻¹ = ["+Expression.format(inv[0])+", "+Expression.format(inv[1])+"]\n            ["+Expression.format(inv[2])+", "+Expression.format(inv[3])+"]"; }
+                    catch(IllegalArgumentException e) { detail+="\nNo inverse (singular matrix)"; }
+                    answer=det;
+                    try { saveHistory("MATRIX det ["+v[0]+","+v[1]+";"+v[2]+","+v[3]+"]",Expression.format(det),Expression.format(det)); } catch(Exception ignored) { }
+                    infoDialog("MATRIX 2×2",detail);
+                }); break;
+                case 5: prompt("VECTOR DOT PRODUCT",new String[]{"VECTOR A (2D OR 3D)","VECTOR B (SAME DIMENSION)"},new String[]{"1, 2, 3","4, 5, 6"},v->publish("A · B",AdvancedMath.dot(numbers(v[0]),numbers(v[1])))); break;
+                case 6: complexMenu(); break;
+                case 7: coordinateMenu(); break;
+                case 8: prompt("GCD / LCM",new String[]{"FIRST INTEGER","SECOND INTEGER"},new String[]{"54","24"},v->{
+                    long a=wholeNumber(v[0]),b=wholeNumber(v[1]),gcd=AdvancedMath.gcd(a,b),lcm=AdvancedMath.lcm(a,b);
+                    try { saveHistory("GCD("+a+","+b+")",Long.toString(gcd),Long.toString(gcd)); } catch(Exception ignored) { }
+                    infoDialog("GCD / LCM","GCD = "+gcd+"\nLCM = "+lcm);
+                }); break;
+                case 9: engineering=!engineering; updatePreview(input.getText().toString()); message(engineering?"Engineering notation on":"Engineering notation off"); break;
+                case 10: constantsMenu(); break;
+                case 11: menu("MORE FUNCTIONS",new String[]{"floor(x)","ceil(x)","cot(x)","acot(x)","mod(a,b)"},choice->{
+                    insert(new String[]{"floor(","ceil(","cot(","acot(","mod("}[choice]);
+                }); break;
+                case 12: menu("RANDOM",new String[]{"Random decimal in [0,1)","Random integer in a range"},choice->{
+                    if(choice==0) insert(Expression.format(Math.random()));
+                    else prompt("RANDOM INTEGER",new String[]{"MINIMUM","MAXIMUM"},new String[]{"1","100"},v->{
+                        long a=wholeNumber(v[0]),b=wholeNumber(v[1]);
+                        if(a>b || b-a>1000000000L) throw new IllegalArgumentException("Use a valid range up to 1 billion");
+                        insert(Long.toString(a+(long)(Math.random()*(b-a+1))));
+                    });
+                }); break;
+            }
+        });
+    }
+    private void solvePrompt() {
+        String formula=input.getText().toString().trim();
+        prompt("SOLVE  f(x)=0",new String[]{"f(x)","LEFT BOUND","RIGHT BOUND"},new String[]{formula.isEmpty()?"x-2":formula,"-10","10"},
+            v->publish("SOLVE " + v[0],AdvancedMath.solve(v[0],numeric(v[1]),numeric(v[2]),degrees)));
+    }
+    private long wholeNumber(String value) {
+        double number=numeric(value); if(number!=Math.rint(number) || Math.abs(number)>9e15) throw new IllegalArgumentException("Enter a whole number within 9 quadrillion");
+        return (long)number;
+    }
+    private void coordinateMenu() {
+        menu("COORDINATES",new String[]{"Rectangular → Polar","Polar → Rectangular"},index->prompt(index==0?"RECTANGULAR → POLAR":"POLAR → RECTANGULAR",
+            index==0?new String[]{"x","y"}:new String[]{"r","θ ("+(degrees?"degrees":"radians")+")"},new String[]{"3","4"},v->{
+                double a=numeric(v[0]),b=numeric(v[1]);
+                if(index==0) infoDialog("POLAR","r = "+Expression.format(Math.hypot(a,b))+"\nθ = "+Expression.format(degrees?Math.toDegrees(Math.atan2(b,a)):Math.atan2(b,a)));
+                else { double angle=degrees?Math.toRadians(b):b; infoDialog("RECTANGULAR","x = "+Expression.format(a*Math.cos(angle))+"\ny = "+Expression.format(a*Math.sin(angle))); }
+            }));
+    }
+    private void complexMenu() {
+        menu("COMPLEX NUMBERS",new String[]{"Add  (+)","Subtract  (−)","Multiply  (×)","Divide  (÷)"},operation->prompt("COMPLEX  a+bi  &  c+di",
+            new String[]{"a (REAL 1)","b (IMAGINARY 1)","c (REAL 2)","d (IMAGINARY 2)"},new String[]{"1","2","3","4"},v->{
+                double a=numeric(v[0]),b=numeric(v[1]),c=numeric(v[2]),d=numeric(v[3]),real,imag;
+                switch(operation) {
+                    case 0: real=a+c; imag=b+d; break;
+                    case 1: real=a-c; imag=b-d; break;
+                    case 2: real=a*c-b*d; imag=a*d+b*c; break;
+                    default: double divisor=c*c+d*d; if(divisor==0) throw new IllegalArgumentException("Cannot divide by zero");
+                        real=(a*c+b*d)/divisor; imag=(b*c-a*d)/divisor;
+                }
+                String result=Expression.format(AdvancedMath.finite(real))+(imag<0?" − ":" + ")+Expression.format(Math.abs(AdvancedMath.finite(imag)))+"i";
+                try { saveHistory("COMPLEX " + new String[]{"+","−","×","÷"}[operation],result,Expression.format(real)); } catch(Exception ignored) { }
+                infoDialog("COMPLEX RESULT",result);
+            }));
+    }
+    private void constantsMenu() {
+        String[] names={"Speed of light  c","Planck constant  h","Gravitational constant  G","Avogadro constant  Nₐ","Elementary charge  e","Boltzmann constant  k"};
+        String[] values={"299792458","6.62607015E-34","6.67430E-11","6.02214076E23","1.602176634E-19","1.380649E-23"};
+        menu("SCIENTIFIC CONSTANTS",names,index->{ insert(values[index]); message(names[index]+" inserted (SI units)"); });
+    }
+    private void memoryMenu() {
+        menu("MEMORY  ·  "+Expression.format(memory),new String[]{"M+  Add display to memory","M−  Subtract display from memory","MR  Recall memory","MC  Clear memory"},index->{
+            if(index==0) memory+=current(); if(index==1) memory-=current();
+            if(index==2) insert(Expression.format(memory)); if(index==3) memory=0;
+            saveMemory(); message("Memory: "+Expression.format(memory));
+        });
+    }
+    private void fractionDisplay() {
+        try { double value=current(); preview.setText(getString(R.string.result_format,AdvancedMath.fraction(value))); preview.setTextColor(0xff59479b); }
+        catch(Exception e) { message(e.getMessage()); }
     }
     private void history() {
         if(history.length()==0) { empty("◷","No calculations yet","Your solved expressions will appear here."); return; }

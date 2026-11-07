@@ -9,14 +9,20 @@ public final class Expression {
     private final String input;
     private final boolean degrees;
     private final double answer;
+    private final double variable;
     private int position;
 
     public Expression(String input, boolean degrees, double answer) {
+        this(input, degrees, answer, Double.NaN);
+    }
+
+    public Expression(String input, boolean degrees, double answer, double variable) {
         this.input = input.replace('×', '*').replace('÷', '/').replace('−', '-')
                 .replace('π', 'p').replace('√', 'r').replace("Ans", "a")
                 .replace("²", "^2").replace("³", "^3").replace("⁻", "-").replace("⁺", "+");
         this.degrees = degrees;
         this.answer = answer;
+        this.variable = variable;
     }
 
     public double evaluate() {
@@ -90,6 +96,7 @@ public final class Expression {
         if (word("asin")) return fromAngle(Math.asin(argument()));
         if (word("acos")) return fromAngle(Math.acos(argument()));
         if (word("atan")) return fromAngle(Math.atan(argument()));
+        if (word("acot")) return fromAngle(Math.atan2(1,argument()));
         if (word("sinh")) return Math.sinh(argument());
         if (word("cosh")) return Math.cosh(argument());
         if (word("tanh")) return Math.tanh(argument());
@@ -100,14 +107,30 @@ public final class Expression {
             if (Math.abs(Math.cos(x)) < 1e-12) throw new IllegalArgumentException("Tangent is undefined at this angle");
             return cleanTrig(Math.tan(x), x);
         }
+        if (word("cot")) {
+            double x=toAngle(argument());
+            if(Math.abs(Math.sin(x))<1e-12) throw new IllegalArgumentException("Cotangent is undefined at this angle");
+            return cleanTrig(1/Math.tan(x),x);
+        }
         if (word("log")) return Math.log10(argument());
         if (word("ln")) return Math.log(argument());
         if (word("abs")) return Math.abs(argument());
+        if (word("floor")) return Math.floor(argument());
+        if (word("ceil")) return Math.ceil(argument());
+        if (word("mod")) {
+            if(!eat('(')) throw error("Expected (");
+            double first=sum(); if(!eat(',')) throw error("Expected ,");
+            double second=enclosed(); return first%second;
+        }
         if (word("exp")) return Math.exp(argument());
         if (word("cbrt")) return Math.cbrt(argument());
         if (eat('r')) return Math.sqrt(argument());
         if (eat('p')) return Math.PI;
         if (eat('a')) return answer;
+        if (eat('x')) {
+            if (Double.isNaN(variable)) throw error("x is only available in calculus tools");
+            return variable;
+        }
         if (eat('e')) return Math.E;
         throw error("Expected a number or function");
     }
@@ -122,8 +145,8 @@ public final class Expression {
         spaces();
         if (position == input.length()) return false;
         char c = input.charAt(position);
-        return c == '(' || c == 'p' || c == 'e' || c == 'a' || c == 'r'
-                || c == 's' || c == 'c' || c == 't' || c == 'l';
+        return c == '(' || c == 'p' || c == 'e' || c == 'a' || c == 'r' || c == 'x'
+                || c == 's' || c == 'c' || c == 't' || c == 'l' || c == 'f' || c == 'm';
     }
     private boolean eat(char c) { spaces(); if (position < input.length() && input.charAt(position) == c) { position++; return true; } return false; }
     private void spaces() { while (position < input.length() && Character.isWhitespace(input.charAt(position))) position++; }

@@ -35,6 +35,9 @@ public class ExpressionTest {
         check("5 nPr 2", true, 20);
         check("5!", true, 120);
         check("1E-10", true, 1e-10);
+        check("floor(2.9)+ceil(1.1)",true,4);
+        check("mod(10,3)",true,1);
+        check("cot(45)",true,1);
         assertNotEquals("0", Expression.format(1e-15));
     }
 
