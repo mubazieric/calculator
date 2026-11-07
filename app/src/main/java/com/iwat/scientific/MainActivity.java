@@ -80,9 +80,16 @@ public class MainActivity extends Activity {
             });
             root.requestApplyInsets();
         }
-        ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.setVerticalScrollBarEnabled(false);
-        root.addView(scroll, new LinearLayout.LayoutParams(-1,0,1));
-        body = column(); body.setPadding(dp(20),dp(20),dp(20),dp(24)); scroll.addView(body);
+        body = column();
+        if (page.equals("Calculate")) {
+            // Keep the whole keypad in the available viewport, even on compact phones.
+            body.setPadding(dp(12),dp(7),dp(12),dp(7));
+            root.addView(body, new LinearLayout.LayoutParams(-1,0,1));
+        } else {
+            ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.setVerticalScrollBarEnabled(false);
+            root.addView(scroll, new LinearLayout.LayoutParams(-1,0,1));
+            body.setPadding(dp(20),dp(20),dp(20),dp(24)); scroll.addView(body);
+        }
         header();
         switch (page) {
             case "Convert": converter(); break;
@@ -94,11 +101,13 @@ public class MainActivity extends Activity {
     }
     private void header() {
         LinearLayout top = row(); body.addView(top);
-        TextView mark = text("  ∑  ",24,BG,true); mark.setGravity(Gravity.CENTER);
-        mark.setBackground(gradient(TEAL,0xff7cb7ee,16)); top.addView(mark,new LinearLayout.LayoutParams(dp(50),dp(50)));
-        LinearLayout titles = column(); titles.setPadding(dp(12),0,0,0); top.addView(titles,new LinearLayout.LayoutParams(0,-2,1));
-        titles.addView(text("IWAT",21,INK,true)); titles.addView(text("SCIENTIFIC CALCULATOR",10,TEAL,true));
-        TextView ornament = text("✦",27,PURPLE,true); top.addView(ornament);
+        boolean compact = screen.equals("Calculate");
+        TextView mark = text("∑",compact?20:24,BG,true); mark.setGravity(Gravity.CENTER);
+        mark.setBackground(gradient(TEAL,0xff7cb7ee,12)); top.addView(mark,new LinearLayout.LayoutParams(dp(compact?38:50),dp(compact?38:50)));
+        LinearLayout titles = column(); titles.setPadding(dp(10),0,0,0); top.addView(titles,new LinearLayout.LayoutParams(0,-2,1));
+        titles.addView(text("IWAT",compact?17:21,INK,true)); titles.addView(text("SCIENTIFIC CALCULATOR",compact?9:10,TEAL,true));
+        TextView ornament = text("✦",compact?21:27,PURPLE,true); top.addView(ornament);
+        if (compact) { gap(body,6); return; }
         gap(body,26);
         body.addView(text(screen.equals("Calculate") ? "Your pocket laboratory." : screen.equals("Scan") ? "Solve from a photo." : screen.equals("History") ? "Every answer, saved." : "Convert with confidence.",24,INK,true));
         gap(body,5);
@@ -106,28 +115,29 @@ public class MainActivity extends Activity {
         gap(body,22);
     }
     private void navigation() {
-        nav = row(); pad(nav,8,8); nav.setBackgroundColor(0xff111c2e); root.addView(nav);
+        nav = row(); pad(nav,8,4); nav.setBackgroundColor(0xff111c2e); root.addView(nav);
         String[] items = {"Calculate","Convert","History","Scan"}; String[] icons = {"▦","⇄","◷","◎"};
         for (int i=0;i<items.length;i++) {
             final String destination = items[i];
-            LinearLayout cell=column(); cell.setGravity(Gravity.CENTER); pad(cell,0,5);
+            LinearLayout cell=column(); cell.setGravity(Gravity.CENTER);
             if (screen.equals(destination)) cell.setBackground(shape(0xff20384a,16));
-            TextView symbol=text(icons[i],22,screen.equals(destination)?TEAL:MUTED,true); symbol.setGravity(Gravity.CENTER); cell.addView(symbol);
+            TextView symbol=text(icons[i],20,screen.equals(destination)?TEAL:MUTED,true); symbol.setGravity(Gravity.CENTER); cell.addView(symbol);
             TextView label=text(destination,10,screen.equals(destination)?TEAL:MUTED,true); label.setGravity(Gravity.CENTER); cell.addView(label);
-            nav.addView(cell,new LinearLayout.LayoutParams(0,dp(58),1)); cell.setOnClickListener(v->show(destination));
+            nav.addView(cell,new LinearLayout.LayoutParams(0,dp(48),1)); cell.setOnClickListener(v->show(destination));
         }
     }
     private void calculator() {
-        LinearLayout display=column(); pad(display,20,20); display.setBackground(gradient(0xff1c3446,0xff19223e,24)); body.addView(display);
+        LinearLayout display=column(); pad(display,14,9); display.setBackground(gradient(0xff1c3446,0xff19223e,18));
+        body.addView(display,new LinearLayout.LayoutParams(-1,dp(111)));
         LinearLayout flags=row(); display.addView(flags);
         angleBadge=text(degrees?"● DEG":"● RAD",11,TEAL,true); flags.addView(angleBadge,new LinearLayout.LayoutParams(0,-2,1));
         TextView mode=text("fx-991  •  NATURAL DISPLAY",10,MUTED,true); flags.addView(mode);
-        gap(display,20);
-        input=new EditText(this); input.setSingleLine(false); input.setMinLines(2); input.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);
-        input.setTextSize(25); input.setTextColor(INK); input.setHintTextColor(MUTED); input.setHint("0");
+        input=new EditText(this); input.setSingleLine(false); input.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);
+        input.setTextSize(22); input.setTextColor(INK); input.setHintTextColor(MUTED); input.setHint("0");
         input.setBackgroundColor(Color.TRANSPARENT); input.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        display.addView(input,new LinearLayout.LayoutParams(-1,dp(82))); input.setText(expression); input.setSelection(input.length());
-        preview=text("= 0",30,TEAL,true); preview.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL); display.addView(preview);
+        display.addView(input,new LinearLayout.LayoutParams(-1,0,1)); input.setText(expression); input.setSelection(input.length());
+        preview=text("= 0",24,TEAL,true); preview.setSingleLine(true); preview.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);
+        display.addView(preview,new LinearLayout.LayoutParams(-1,dp(28)));
         input.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s,int start,int count,int after) { }
             public void onTextChanged(CharSequence s,int start,int before,int count) {
@@ -136,35 +146,36 @@ public class MainActivity extends Activity {
             }
             public void afterTextChanged(Editable e) { }
         });
-        gap(body,17);
+        gap(body,6);
         LinearLayout strip=row(); body.addView(strip);
         small(strip,degrees?"DEG":"RAD",()->{ degrees=!degrees; getPreferences(0).edit().putBoolean("degrees",degrees).apply(); angleBadge.setText(degrees?"● DEG":"● RAD"); show("Calculate"); });
         small(strip,"M+",()->{ memory+=current(); saveMemory(); });
         small(strip,"M−",()->{ memory-=current(); saveMemory(); });
         small(strip,"MR",()->insert(Expression.format(memory)));
         small(strip,"MC",()->{ memory=0; saveMemory(); });
-        gap(body,14);
+        gap(body,5);
+        LinearLayout keypad=column(); body.addView(keypad,new LinearLayout.LayoutParams(-1,0,1));
         String[][] scientific={{"sin(","cos(","tan(","log(","ln("},{"asin(","acos(","atan(","√(","^"},{"π","e","x²","x!","nCr"},{"sinh(","cosh(","tanh(","abs(","nPr"},{"a/b","∛","eˣ","10ˣ","n√"}};
-        for(String[] keys:scientific) keyRow(keys,true);
-        gap(body,8);
-        String[][] number={{"AC","(",")","⌫"},{"7","8","9","÷"},{"4","5","6","×"},{"1","2","3","−"},{"0",".","Ans","+"},{"±","%","1/x","="}};
-        for(String[] keys:number) keyRow(keys,false);
-        gap(body,12);
-        TextView hint=text("TIP  •  Try  sin(30) + √(16)  or  5 nCr 2",11,MUTED,false); hint.setGravity(Gravity.CENTER); body.addView(hint);
+        for(String[] keys:scientific) keyRow(keypad,keys,true);
+        String[][] number={{"AC","(",")","⌫","±"},{"7","8","9","÷","%"},{"4","5","6","×","1/x"},{"1","2","3","−","Ans"},{"0",".","EXP","+","="}};
+        for(String[] keys:number) keyRow(keypad,keys,false);
+        // The editor does not summon the keyboard just because the activity opened.
+        body.setFocusableInTouchMode(true); body.requestFocus();
     }
     private void saveMemory() { getPreferences(0).edit().putLong("memory",Double.doubleToRawLongBits(memory)).apply(); }
     private double current() { try { return new Expression(input.getText().toString(),degrees,answer).evaluate(); } catch(Exception e) { return answer; } }
     private void small(LinearLayout parent,String label,Runnable action) {
         TextView button=text(label,11,TEAL,true); button.setGravity(Gravity.CENTER); button.setBackground(shape(CARD,12));
-        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(37),1); p.setMargins(dp(2),0,dp(2),0); parent.addView(button,p); button.setOnClickListener(v->action.run());
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(30),1); p.setMargins(dp(2),0,dp(2),0); parent.addView(button,p); button.setOnClickListener(v->action.run());
     }
-    private void keyRow(String[] keys,boolean science) {
-        LinearLayout line=row(); body.addView(line);
+    private void keyRow(LinearLayout keypad,String[] keys,boolean science) {
+        LinearLayout line=row(); keypad.addView(line,new LinearLayout.LayoutParams(-1,0,1));
         for(String key:keys) {
             boolean equals=key.equals("=");
-            TextView button=text(key,science?14:19,equals?BG:(science?0xffc9c4ff:INK),true); button.setGravity(Gravity.CENTER);
-            button.setBackground(equals?gradient(TEAL,0xff72cfe8,15):shape(science?CARD:KEY,15));
-            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(science?48:55),1); p.setMargins(dp(3),dp(3),dp(3),dp(3)); line.addView(button,p);
+            TextView button=text(key,science?13:16,equals?BG:(science?0xffc9c4ff:INK),true); button.setGravity(Gravity.CENTER);
+            button.setIncludeFontPadding(false); button.setSingleLine(true);
+            button.setBackground(equals?gradient(TEAL,0xff72cfe8,10):shape(science?CARD:KEY,10));
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,-1,1); p.setMargins(dp(2),dp(1),dp(2),dp(1)); line.addView(button,p);
             button.setOnClickListener(v->press(key));
         }
     }
@@ -182,6 +193,7 @@ public class MainActivity extends Activity {
             case "10ˣ": insert("10^("); return;
             case "1/x": insert("^(-1)"); return;
             case "±": insert("-"); return;
+            case "EXP": insert("E"); return;
             default: insert(key);
         }
     }

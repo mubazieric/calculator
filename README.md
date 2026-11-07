@@ -5,6 +5,7 @@ Native Android scientific calculator with a dark, custom-designed interface. Sou
 ## Features
 
 - Scientific arithmetic: precedence, parentheses, powers and roots, fractions as division, factorial, permutations/combinations, constants π and e, inverse and hyperbolic trig, logs, absolute value, scientific notation, DEG/RAD and answer recall.
+- Calculator display and complete scientific/numeric keypad fit the screen without scrolling in portrait; converter, history and scan remain scrollable where needed.
 - Memory controls (M+, M−, MR, MC), live preview and locally saved calculation history.
 - Dedicated converter: length, mass, temperature, area, volume, time, speed and data.
 - Photo-to-expression: full-size camera image, on-device ML Kit Latin text recognition, editable extraction and explicit solve. No server, API key or image upload.
