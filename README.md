@@ -11,7 +11,7 @@ Native Android scientific calculator with a dark, custom-designed interface. Sou
 
 ## Build
 
-Open the repository root in Android Studio and run the `app` module, or from the repository root run `gradlew.bat :app:assembleDebug` on Windows (`./gradlew :app:assembleDebug` on macOS/Linux). Requires Android SDK 35, Java 17+ and internet for first-time dependencies. Debug APK: `app/build/outputs/apk/debug/app-debug.apk`. Minimum Android version: 7.0 (API 24).
+Open the repository root in Android Studio and run the `app` module, or from the repository root run `gradlew.bat :app:assembleDebug` on Windows (`./gradlew :app:assembleDebug` on macOS/Linux). Requires Android SDK 36, Java 17+ and internet for first-time dependencies. Debug APK: `app/build/outputs/apk/debug/app-debug.apk`. Minimum Android version: 7.0 (API 24); target: Android 16 (API 36).
 
 ## Scope notes
 

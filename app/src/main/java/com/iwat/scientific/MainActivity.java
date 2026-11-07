@@ -7,9 +7,11 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Build;
 import android.provider.MediaStore;
 import android.view.Gravity;
 import android.view.View;
+import android.view.WindowInsets;
 import android.view.inputmethod.InputMethodManager;
 import android.content.Context;
 import android.widget.Button;
@@ -69,6 +71,15 @@ public class MainActivity extends Activity {
         screen = page;
         root = column(); root.setBackgroundColor(BG);
         setContentView(root);
+        // API 35+ draws the app behind system bars. Keep controls clear of both bars.
+        if (Build.VERSION.SDK_INT >= 35) {
+            root.setOnApplyWindowInsetsListener((view, insets) -> {
+                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+                view.setPadding(0, bars.top, 0, bars.bottom);
+                return insets;
+            });
+            root.requestApplyInsets();
+        }
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.setVerticalScrollBarEnabled(false);
         root.addView(scroll, new LinearLayout.LayoutParams(-1,0,1));
         body = column(); body.setPadding(dp(20),dp(20),dp(20),dp(24)); scroll.addView(body);
