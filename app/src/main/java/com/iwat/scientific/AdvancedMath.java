@@ -58,6 +58,116 @@ public final class AdvancedMath {
         if(a.length!=b.length || a.length==0) throw new IllegalArgumentException("Vectors need equal dimensions");
         double sum=0; for(int i=0;i<a.length;i++) sum+=a[i]*b[i]; return finite(sum);
     }
+    public static double magnitude(double[] vector) { return Math.sqrt(dot(vector,vector)); }
+    public static double[] cross(double[] a,double[] b) {
+        if(a.length!=3 || b.length!=3) throw new IllegalArgumentException("Cross product needs two 3D vectors");
+        return new double[]{finite(a[1]*b[2]-a[2]*b[1]),finite(a[2]*b[0]-a[0]*b[2]),finite(a[0]*b[1]-a[1]*b[0])};
+    }
+
+    private static void square(double[][] matrix) {
+        if(matrix==null || matrix.length<2 || matrix.length>3) throw new IllegalArgumentException("Use a 2×2 or 3×3 matrix");
+        for(double[] row:matrix) {
+            if(row==null || row.length!=matrix.length) throw new IllegalArgumentException("Matrix must be square");
+            for(double value:row) finite(value);
+        }
+    }
+    public static double matrixDeterminant(double[][] matrix) {
+        square(matrix);
+        if(matrix.length==2) return determinant(matrix[0][0],matrix[0][1],matrix[1][0],matrix[1][1]);
+        double[] a=matrix[0],b=matrix[1],c=matrix[2];
+        return finite(a[0]*(b[1]*c[2]-b[2]*c[1])-a[1]*(b[0]*c[2]-b[2]*c[0])+a[2]*(b[0]*c[1]-b[1]*c[0]));
+    }
+    /** Partial-pivot Gauss-Jordan elimination for small square systems. */
+    public static double[] linearSystem(double[][] matrix,double[] rhs) {
+        square(matrix); int n=matrix.length;
+        if(rhs==null || rhs.length!=n) throw new IllegalArgumentException("Enter one result per equation");
+        double[][] a=new double[n][n+1];
+        for(int r=0;r<n;r++) { System.arraycopy(matrix[r],0,a[r],0,n); a[r][n]=finite(rhs[r]); }
+        for(int col=0;col<n;col++) {
+            int pivot=col; for(int r=col+1;r<n;r++) if(Math.abs(a[r][col])>Math.abs(a[pivot][col])) pivot=r;
+            if(Math.abs(a[pivot][col])<1e-12) throw new IllegalArgumentException("No unique solution (singular system)");
+            double[] tmp=a[pivot]; a[pivot]=a[col]; a[col]=tmp;
+            double scale=a[col][col]; for(int c=col;c<=n;c++) a[col][c]/=scale;
+            for(int r=0;r<n;r++) if(r!=col) {
+                double factor=a[r][col]; for(int c=col;c<=n;c++) a[r][c]-=factor*a[col][c];
+            }
+        }
+        double[] solution=new double[n]; for(int i=0;i<n;i++) solution[i]=finite(a[i][n]); return solution;
+    }
+    public static double[][] matrixInverse(double[][] matrix) {
+        square(matrix); int n=matrix.length; double[][] inverse=new double[n][n];
+        for(int c=0;c<n;c++) {
+            double[] unit=new double[n]; unit[c]=1;
+            double[] column=linearSystem(matrix,unit);
+            for(int r=0;r<n;r++) inverse[r][c]=column[r];
+        }
+        return inverse;
+    }
+    public static double[][] matrixMultiply(double[][] a,double[][] b) {
+        square(a); square(b); if(a.length!=b.length) throw new IllegalArgumentException("Matrix sizes must match");
+        int n=a.length; double[][] result=new double[n][n];
+        for(int i=0;i<n;i++) for(int j=0;j<n;j++) for(int k=0;k<n;k++) result[i][j]+=a[i][k]*b[k][j];
+        for(double[] row:result) for(double x:row) finite(x);
+        return result;
+    }
+    public static double limit(String formula,double x,boolean degrees) {
+        double lastLeft=0,lastRight=0,step=Math.max(0.01,Math.abs(x)*.01);
+        for(int i=0;i<10;i++) {
+            step/=2;
+            double left=at(formula,x-step,degrees),right=at(formula,x+step,degrees);
+            if(i==9) {
+                double tolerance=1e-3*Math.max(1,Math.max(Math.abs(left),Math.abs(right)));
+                if(Math.abs(left-right)>tolerance || Math.abs(left-lastLeft)>tolerance || Math.abs(right-lastRight)>tolerance)
+                    throw new IllegalArgumentException("Limit does not converge from both sides");
+                return finite((left+right)/2);
+            }
+            lastLeft=left; lastRight=right;
+        }
+        throw new IllegalArgumentException("Limit could not be evaluated");
+    }
+    public static double[][] table(String formula,double start,double end,double step,boolean degrees) {
+        if(!(step>0) || end<start || (end-start)/step>99.0000001) throw new IllegalArgumentException("Use a positive step and at most 100 rows");
+        int count=(int)Math.floor((end-start)/step+1e-9)+1;
+        double[][] rows=new double[count][2];
+        for(int i=0;i<count;i++) { rows[i][0]=finite(start+i*step); rows[i][1]=at(formula,rows[i][0],degrees); }
+        return rows;
+    }
+    public static String quadratic(double a,double b,double c) {
+        if(a==0) {
+            if(b==0) throw new IllegalArgumentException("No unique root");
+            return "x = " + Expression.format(finite(-c/b));
+        }
+        double d=finite(b*b-4*a*c);
+        if(d>=0) {
+            double root=Math.sqrt(d);
+            return "x₁ = " + Expression.format(finite((-b+root)/(2*a))) + "\nx₂ = " + Expression.format(finite((-b-root)/(2*a)));
+        }
+        double real=finite(-b/(2*a)),imag=finite(Math.sqrt(-d)/Math.abs(2*a));
+        return "x₁ = " + Expression.format(real) + " + " + Expression.format(imag) + "i\nx₂ = " + Expression.format(real) + " − " + Expression.format(imag) + "i";
+    }
+    public static double normalPdf(double x,double mean,double sigma) {
+        if(!(sigma>0)) throw new IllegalArgumentException("Standard deviation must be positive");
+        double z=(x-mean)/sigma; return finite(Math.exp(-z*z/2)/(sigma*Math.sqrt(2*Math.PI)));
+    }
+    public static double normalCdf(double x,double mean,double sigma) {
+        if(!(sigma>0)) throw new IllegalArgumentException("Standard deviation must be positive");
+        double z=(x-mean)/sigma, absolute=Math.abs(z), t=1/(1+0.2316419*absolute);
+        double density=Math.exp(-absolute*absolute/2)/Math.sqrt(2*Math.PI);
+        double tail=density*t*(0.319381530+t*(-0.356563782+t*(1.781477937+t*(-1.821255978+t*1.330274429))));
+        return Math.max(0,Math.min(1,z>=0?1-tail:tail));
+    }
+    public static double binomial(int n,int k,double p) {
+        if(n<0 || n>1000 || k<0 || k>n || p<0 || p>1) throw new IllegalArgumentException("Use 0 ≤ k ≤ n ≤ 1000 and 0 ≤ p ≤ 1");
+        if(p==0) return k==0?1:0; if(p==1) return k==n?1:0;
+        double log=0; for(int i=1;i<=k;i++) log+=Math.log(n-k+i)-Math.log(i);
+        return finite(Math.exp(log+k*Math.log(p)+(n-k)*Math.log1p(-p)));
+    }
+    public static double poisson(int k,double lambda) {
+        if(k<0 || k>10000 || lambda<0 || !Double.isFinite(lambda)) throw new IllegalArgumentException("Use k ≥ 0 and λ ≥ 0");
+        if(lambda==0) return k==0?1:0;
+        double log=-lambda+k*Math.log(lambda); for(int i=2;i<=k;i++) log-=Math.log(i);
+        return finite(Math.exp(log));
+    }
     public static long gcd(long a,long b) {
         if(a==Long.MIN_VALUE || b==Long.MIN_VALUE) throw new IllegalArgumentException("Number is too large");
         a=Math.abs(a); b=Math.abs(b); while(b!=0) { long t=a%b; a=b; b=t; } return a;

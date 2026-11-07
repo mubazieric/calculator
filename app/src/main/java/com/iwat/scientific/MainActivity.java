@@ -304,7 +304,8 @@ public class MainActivity extends Activity {
     }
     private void infoDialog(String label,String detail) {
         TextView content=text(detail,17,INK,false); pad(content,22,18);
-        AlertDialog dialog=new AlertDialog.Builder(this).setView(content).setPositiveButton("DONE",null).create();
+        ScrollView scroll=new ScrollView(this); scroll.addView(content);
+        AlertDialog dialog=new AlertDialog.Builder(this).setView(scroll).setPositiveButton("DONE",null).create();
         openDialog(dialog,label);
     }
     private void publish(String label,double result) {
@@ -359,9 +360,11 @@ public class MainActivity extends Activity {
     }
     private void toolsMenu() {
         String[] choices={"d/dx  ·  Derivative at x","∫  ·  Definite integral","SOLVE  ·  Root in an interval",
-            "STAT  ·  Sum, mean, median, deviation","MATRIX  ·  2×2 determinant / inverse","VECTOR  ·  Dot product",
+            "STAT  ·  Sum, mean, median, deviation","MATRIX  ·  2×2 / 3×3 operations","VECTOR  ·  Dot, cross, magnitude",
             "CMPLX  ·  Complex arithmetic","Pol / Rec  ·  Coordinate conversion","GCD / LCM  ·  Integers",
-            "ENG  ·  Engineering notation","CONST  ·  Scientific constants","FUNC  ·  Floor, ceil, cot, mod","RAN  ·  Random numbers"};
+            "ENG  ·  Engineering notation","CONST  ·  Scientific constants","FUNC  ·  Floor, ceil, cot, mod","RAN  ·  Random numbers",
+            "LIMIT  ·  Two-sided limit","TABLE  ·  Function values","POLY  ·  Quadratic roots",
+            "SIMUL  ·  Linear equations","DIST  ·  Probability","BASE  ·  BIN / OCT / DEC / HEX"};
         menu("SCIENTIFIC TOOLS",choices,index->{
             String formula=input.getText().toString().trim(); if(formula.isEmpty()) formula="x^2";
             String initial=formula;
@@ -373,15 +376,8 @@ public class MainActivity extends Activity {
                     infoDialog("STATISTICS", "n = " + numbers(v[0]).length + "\nΣ = " + Expression.format(stats[0]) + "\nMean = " + Expression.format(stats[1]) + "\nMedian = " + Expression.format(stats[2]) + "\nσ = " + Expression.format(stats[3]));
                     try { saveHistory("STAT mean: " + v[0],Expression.format(stats[1]),Expression.format(stats[1])); } catch(Exception ignored) { }
                 }); break;
-                case 4: prompt("MATRIX 2×2",new String[]{"TOP LEFT (a)","TOP RIGHT (b)","BOTTOM LEFT (c)","BOTTOM RIGHT (d)"},new String[]{"1","2","3","4"},v->{ double a=numeric(v[0]),b=numeric(v[1]),c=numeric(v[2]),d=numeric(v[3]); double det=AdvancedMath.determinant(a,b,c,d);
-                    String detail="det(A) = "+Expression.format(det);
-                    try { double[] inv=AdvancedMath.inverse(a,b,c,d); detail+="\nA⁻¹ = ["+Expression.format(inv[0])+", "+Expression.format(inv[1])+"]\n            ["+Expression.format(inv[2])+", "+Expression.format(inv[3])+"]"; }
-                    catch(IllegalArgumentException e) { detail+="\nNo inverse (singular matrix)"; }
-                    answer=det;
-                    try { saveHistory("MATRIX det ["+v[0]+","+v[1]+";"+v[2]+","+v[3]+"]",Expression.format(det),Expression.format(det)); } catch(Exception ignored) { }
-                    infoDialog("MATRIX 2×2",detail);
-                }); break;
-                case 5: prompt("VECTOR DOT PRODUCT",new String[]{"VECTOR A (2D OR 3D)","VECTOR B (SAME DIMENSION)"},new String[]{"1, 2, 3","4, 5, 6"},v->publish("A · B",AdvancedMath.dot(numbers(v[0]),numbers(v[1])))); break;
+                case 4: matrixMenu(); break;
+                case 5: vectorMenu(); break;
                 case 6: complexMenu(); break;
                 case 7: coordinateMenu(); break;
                 case 8: prompt("GCD / LCM",new String[]{"FIRST INTEGER","SECOND INTEGER"},new String[]{"54","24"},v->{
@@ -402,6 +398,22 @@ public class MainActivity extends Activity {
                         insert(Long.toString(a+(long)(Math.random()*(b-a+1))));
                     });
                 }); break;
+                case 13: prompt("TWO-SIDED LIMIT",new String[]{"f(x)","AS x APPROACHES"},new String[]{initial.equals("x^2")?"sin(x)/x":initial,"0"},v->publish("lim " + v[0] + " as x→" + v[1],AdvancedMath.limit(v[0],numeric(v[1]),degrees))); break;
+                case 14: prompt("FUNCTION TABLE",new String[]{"f(x)","START","END","STEP"},new String[]{initial,"0","10","1"},v->{
+                    double[][] rows=AdvancedMath.table(v[0],numeric(v[1]),numeric(v[2]),numeric(v[3]),degrees);
+                    StringBuilder output=new StringBuilder("x            f(x)\n");
+                    for(double[] row:rows) output.append(Expression.format(row[0])).append("             ").append(Expression.format(row[1])).append('\n');
+                    infoDialog("TABLE  ·  "+rows.length+" ROWS",output.toString());
+                }); break;
+                case 15: prompt("QUADRATIC  ax²+bx+c=0",new String[]{"a","b","c"},new String[]{"1","-3","2"},v->infoDialog("QUADRATIC ROOTS",AdvancedMath.quadratic(numeric(v[0]),numeric(v[1]),numeric(v[2])))); break;
+                case 16: prompt("SIMULTANEOUS EQUATIONS",new String[]{"COEFFICIENTS (ROWS SEPARATED BY ;)","RESULTS (SEPARATED BY ,)"},new String[]{"2, 1; 1, -1","5, 1"},v->{
+                    double[] solution=AdvancedMath.linearSystem(matrix(v[0]),numbers(v[1]));
+                    StringBuilder output=new StringBuilder(); String[] names={"x","y","z"};
+                    for(int i=0;i<solution.length;i++) output.append(names[i]).append(" = ").append(Expression.format(solution[i])).append('\n');
+                    infoDialog("UNIQUE SOLUTION",output.toString());
+                }); break;
+                case 17: distributionMenu(); break;
+                case 18: basePrompt(); break;
             }
         });
     }
@@ -410,9 +422,74 @@ public class MainActivity extends Activity {
         prompt("SOLVE  f(x)=0",new String[]{"f(x)","LEFT BOUND","RIGHT BOUND"},new String[]{formula.isEmpty()?"x-2":formula,"-10","10"},
             v->publish("SOLVE " + v[0],AdvancedMath.solve(v[0],numeric(v[1]),numeric(v[2]),degrees)));
     }
+    private double[][] matrix(String raw) {
+        String[] rows=raw.split(";"); double[][] values=new double[rows.length][];
+        for(int i=0;i<rows.length;i++) values[i]=numbers(rows[i]);
+        // Validate dimensions before any operation, including linear systems.
+        if(rows.length<2 || rows.length>3) throw new IllegalArgumentException("Enter 2 or 3 rows separated by semicolons");
+        for(double[] row:values) if(row.length!=rows.length) throw new IllegalArgumentException("Each row needs "+rows.length+" entries");
+        return values;
+    }
+    private String matrixText(double[][] matrix) {
+        StringBuilder result=new StringBuilder();
+        for(double[] row:matrix) {
+            result.append("[ ");
+            for(int i=0;i<row.length;i++) { if(i>0) result.append("     "); result.append(Expression.format(row[i])); }
+            result.append(" ]\n");
+        }
+        return result.toString();
+    }
+    private void matrixMenu() {
+        menu("MATRIX  ·  2×2 / 3×3",new String[]{"Determinant","Inverse","Multiply A × B"},index->{
+            String[] labels=index==2?new String[]{"MATRIX A (ROWS SEPARATED BY ;)","MATRIX B (ROWS SEPARATED BY ;)"}:new String[]{"MATRIX (ROWS SEPARATED BY ;)"};
+            String[] defaults=index==2?new String[]{"1, 2; 3, 4","5, 6; 7, 8"}:new String[]{"1, 2; 3, 4"};
+            prompt("MATRIX  ·  "+new String[]{"DETERMINANT","INVERSE","MULTIPLY"}[index],labels,defaults,v->{
+                double[][] a=matrix(v[0]);
+                if(index==0) publish("det("+v[0]+")",AdvancedMath.matrixDeterminant(a));
+                else if(index==1) infoDialog("INVERSE MATRIX",matrixText(AdvancedMath.matrixInverse(a)));
+                else infoDialog("MATRIX PRODUCT",matrixText(AdvancedMath.matrixMultiply(a,matrix(v[1]))));
+            });
+        });
+    }
+    private void vectorMenu() {
+        menu("VECTOR  ·  2D / 3D",new String[]{"Dot product A · B","Cross product A × B (3D)","Magnitude |A|"},index->{
+            String[] labels=index==2?new String[]{"VECTOR A (COMMA SEPARATED)"}:new String[]{"VECTOR A (COMMA SEPARATED)","VECTOR B (SAME DIMENSION)"};
+            String[] defaults=index==2?new String[]{"3, 4"}:new String[]{"1, 2, 3","4, 5, 6"};
+            prompt("VECTOR  ·  "+new String[]{"DOT","CROSS","MAGNITUDE"}[index],labels,defaults,v->{
+                double[] a=numbers(v[0]);
+                if(index==0) publish("A · B",AdvancedMath.dot(a,numbers(v[1])));
+                else if(index==1) {
+                    double[] result=AdvancedMath.cross(a,numbers(v[1]));
+                    infoDialog("A × B","[ "+Expression.format(result[0])+", "+Expression.format(result[1])+", "+Expression.format(result[2])+" ]");
+                } else publish("|A|",AdvancedMath.magnitude(a));
+            });
+        });
+    }
+    private void distributionMenu() {
+        menu("PROBABILITY DISTRIBUTIONS",new String[]{"Normal PDF  ·  f(x)","Normal CDF  ·  P(X ≤ x)","Binomial PMF  ·  P(X = k)","Poisson PMF  ·  P(X = k)"},index->{
+            if(index<2) prompt(index==0?"NORMAL PDF":"NORMAL CDF",new String[]{"x","MEAN  μ","STANDARD DEVIATION  σ"},new String[]{"0","0","1"},v->publish(index==0?"Normal PDF":"Normal CDF",index==0?
+                AdvancedMath.normalPdf(numeric(v[0]),numeric(v[1]),numeric(v[2])):AdvancedMath.normalCdf(numeric(v[0]),numeric(v[1]),numeric(v[2]))));
+            else if(index==2) prompt("BINOMIAL PMF",new String[]{"NUMBER OF TRIALS  n","SUCCESSES  k","SUCCESS PROBABILITY  p"},new String[]{"4","2","0.5"},v->publish("Binomial P(X=k)",AdvancedMath.binomial(nonnegativeInt(v[0]),nonnegativeInt(v[1]),numeric(v[2]))));
+            else prompt("POISSON PMF",new String[]{"EVENTS  k","AVERAGE RATE  λ"},new String[]{"2","3"},v->publish("Poisson P(X=k)",AdvancedMath.poisson(nonnegativeInt(v[0]),numeric(v[1]))));
+        });
+    }
+    private void basePrompt() {
+        prompt("BASE CONVERSION",new String[]{"INTEGER (NO PREFIX)","FROM BASE  2, 8, 10, 16","TO BASE  2, 8, 10, 16"},new String[]{"255","10","16"},v->{
+            int from=Integer.parseInt(v[1]),to=Integer.parseInt(v[2]);
+            if(!validBase(from) || !validBase(to)) throw new IllegalArgumentException("Use base 2, 8, 10 or 16");
+            long number=Long.parseLong(v[0],from);
+            infoDialog("BASE  "+from+" → "+to,Long.toString(number,to).toUpperCase(Locale.US));
+        });
+    }
+    private boolean validBase(int base) { return base==2 || base==8 || base==10 || base==16; }
     private long wholeNumber(String value) {
         double number=numeric(value); if(number!=Math.rint(number) || Math.abs(number)>9e15) throw new IllegalArgumentException("Enter a whole number within 9 quadrillion");
         return (long)number;
+    }
+    private int nonnegativeInt(String value) {
+        long number=wholeNumber(value);
+        if(number<0 || number>Integer.MAX_VALUE) throw new IllegalArgumentException("Enter a nonnegative whole number");
+        return (int)number;
     }
     private void coordinateMenu() {
         menu("COORDINATES",new String[]{"Rectangular → Polar","Polar → Rectangular"},index->prompt(index==0?"RECTANGULAR → POLAR":"POLAR → RECTANGULAR",
