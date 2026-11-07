@@ -1,0 +1,4 @@
+<resources>
+    <string name="result_format">= %1$s</string>
+    <string name="open_camera">◎   OPEN CAMERA</string>
+</resources>

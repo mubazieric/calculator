@@ -42,7 +42,6 @@ public final class Expression {
         while (true) {
             if (eat('*')) x *= signed();
             else if (eat('/')) x /= signed();
-            else if (eat('%')) x %= signed();
             else if (word("nCr")) x = combinations(x, signed());
             else if (word("nPr")) x = permutations(x, signed());
             else if (nextAtom()) x *= signed(); // 2π, 2(3+4), (1+2)(3+4)
@@ -58,7 +57,11 @@ public final class Expression {
 
     private double power() {
         double x = atom();
-        while (eat('!')) x = factorial(x);
+        while (true) {
+            if (eat('!')) x = factorial(x);
+            else if (eat('%')) x /= 100;
+            else break;
+        }
         if (eat('^')) x = Math.pow(x, signed()); // right associative; -2^2 = -4
         return x;
     }
@@ -90,13 +93,18 @@ public final class Expression {
         if (word("sinh")) return Math.sinh(argument());
         if (word("cosh")) return Math.cosh(argument());
         if (word("tanh")) return Math.tanh(argument());
-        if (word("sin")) return Math.sin(toAngle(argument()));
-        if (word("cos")) return Math.cos(toAngle(argument()));
-        if (word("tan")) return Math.tan(toAngle(argument()));
+        if (word("sin")) { double x = toAngle(argument()); return cleanTrig(Math.sin(x), x); }
+        if (word("cos")) { double x = toAngle(argument()); return cleanTrig(Math.cos(x), x); }
+        if (word("tan")) {
+            double x = toAngle(argument());
+            if (Math.abs(Math.cos(x)) < 1e-12) throw new IllegalArgumentException("Tangent is undefined at this angle");
+            return cleanTrig(Math.tan(x), x);
+        }
         if (word("log")) return Math.log10(argument());
         if (word("ln")) return Math.log(argument());
         if (word("abs")) return Math.abs(argument());
         if (word("exp")) return Math.exp(argument());
+        if (word("cbrt")) return Math.cbrt(argument());
         if (eat('r')) return Math.sqrt(argument());
         if (eat('p')) return Math.PI;
         if (eat('a')) return answer;
@@ -108,6 +116,7 @@ public final class Expression {
     private double enclosed() { double x = sum(); if (!eat(')')) throw error("Missing )"); return x; }
     private double toAngle(double x) { return degrees ? Math.toRadians(x) : x; }
     private double fromAngle(double x) { return degrees ? Math.toDegrees(x) : x; }
+    private double cleanTrig(double result, double angle) { return Math.abs(angle) > 1e-6 && Math.abs(result) < 1e-12 ? 0 : result; }
     private boolean word(String text) { spaces(); if (input.startsWith(text, position)) { position += text.length(); return true; } return false; }
     private boolean nextAtom() {
         spaces();
@@ -129,7 +138,7 @@ public final class Expression {
     private static double combinations(double n, double r) { int a = whole(n), b = whole(r); if (b > a) throw new IllegalArgumentException("r cannot exceed n"); b = Math.min(b, a - b); double v = 1; for (int i = 1; i <= b; i++) v = v * (a - b + i) / i; return Math.rint(v); }
 
     public static String format(double value) {
-        if (Math.abs(value) < 1e-12) value = 0;
+        if (value == 0) return "0";
         DecimalFormat formatter = new DecimalFormat("0.##########E0", DecimalFormatSymbols.getInstance(Locale.US));
         if (value == Math.rint(value) && Math.abs(value) < 1e12) return String.format(Locale.US, "%.0f", value);
         if (Math.abs(value) >= 1e12 || (Math.abs(value) < 1e-7 && value != 0)) return formatter.format(value);

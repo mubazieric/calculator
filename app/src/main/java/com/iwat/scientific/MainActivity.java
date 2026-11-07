@@ -2,6 +2,8 @@ package com.iwat.scientific;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.ClipData;
+import android.content.ActivityNotFoundException;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -12,6 +14,7 @@ import android.provider.MediaStore;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowInsets;
+import android.text.TextUtils;
 import android.view.inputmethod.InputMethodManager;
 import android.content.Context;
 import android.widget.Button;
@@ -35,11 +38,12 @@ public class MainActivity extends Activity {
     private static final int INK = 0xffe8efff, MUTED = 0xff9ba9c1, BG = 0xff0b1220;
     private static final int CARD = 0xff172238, KEY = 0xff202e46, TEAL = 0xff62e0c8, PURPLE = 0xffad9fff;
     private static final int CAMERA = 4;
-    private LinearLayout root, body, nav;
+    private LinearLayout root, body, nav, calculatorKeys, memoryStrip;
     private EditText input;
     private TextView preview, angleBadge;
     private Uri photo;
     private boolean degrees = true;
+    private boolean secondLayer = false;
     private double answer = 0, memory = 0;
     private String expression = "", screen = "Calculate";
     private JSONArray history = new JSONArray();
@@ -51,7 +55,23 @@ public class MainActivity extends Activity {
         degrees = getPreferences(0).getBoolean("degrees", true);
         memory = Double.longBitsToDouble(getPreferences(0).getLong("memory", Double.doubleToRawLongBits(0)));
         try { history = new JSONArray(getPreferences(0).getString("history", "[]")); } catch (Exception ignored) { }
-        show("Calculate");
+        if (state != null) {
+            expression = state.getString("expression", "");
+            answer = state.getDouble("answer", 0);
+            secondLayer = state.getBoolean("secondLayer", false);
+            photo = state.getParcelable("photo");
+        }
+        show(state == null ? "Calculate" : state.getString("screen", "Calculate"));
+    }
+
+    @Override protected void onSaveInstanceState(Bundle state) {
+        if (input != null && screen.equals("Calculate")) expression = input.getText().toString();
+        state.putString("expression", expression);
+        state.putString("screen", screen);
+        state.putDouble("answer", answer);
+        state.putBoolean("secondLayer", secondLayer);
+        state.putParcelable("photo", photo);
+        super.onSaveInstanceState(state);
     }
 
     private int dp(float n) { return (int)(getResources().getDisplayMetrics().density * n + .5f); }
@@ -69,16 +89,21 @@ public class MainActivity extends Activity {
     private void show(String page) {
         if (input != null && screen.equals("Calculate")) expression = input.getText().toString();
         screen = page;
+        calculatorKeys = null; memoryStrip = null;
         root = column(); root.setBackgroundColor(BG);
         setContentView(root);
-        // API 35+ draws the app behind system bars. Keep controls clear of both bars.
-        if (Build.VERSION.SDK_INT >= 35) {
+        if (Build.VERSION.SDK_INT >= 30) {
             root.setOnApplyWindowInsetsListener((view, insets) -> {
-                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
-                view.setPadding(0, bars.top, 0, bars.bottom);
+                // Android 15+ draws behind system bars; typing hides the keypad
+                // instead of shrinking its buttons beneath the on-screen keyboard.
+                if (Build.VERSION.SDK_INT >= 35) {
+                    android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+                    view.setPadding(0, bars.top, 0, bars.bottom);
+                }
+                if (calculatorKeys != null) calculatorKeys.setVisibility(insets.isVisible(WindowInsets.Type.ime()) ? View.GONE : View.VISIBLE);
+                if (memoryStrip != null) memoryStrip.setVisibility(insets.isVisible(WindowInsets.Type.ime()) ? View.GONE : View.VISIBLE);
                 return insets;
             });
-            root.requestApplyInsets();
         }
         body = column();
         if (page.equals("Calculate")) {
@@ -98,6 +123,7 @@ public class MainActivity extends Activity {
             default: calculator();
         }
         navigation();
+        if (Build.VERSION.SDK_INT >= 30) root.requestApplyInsets();
     }
     private void header() {
         LinearLayout top = row(); body.addView(top);
@@ -131,36 +157,43 @@ public class MainActivity extends Activity {
         body.addView(display,new LinearLayout.LayoutParams(-1,dp(111)));
         LinearLayout flags=row(); display.addView(flags);
         angleBadge=text(degrees?"● DEG":"● RAD",11,TEAL,true); flags.addView(angleBadge,new LinearLayout.LayoutParams(0,-2,1));
-        TextView mode=text("fx-991  •  NATURAL DISPLAY",10,MUTED,true); flags.addView(mode);
-        input=new EditText(this); input.setSingleLine(false); input.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);
+        TextView mode=text(secondLayer?"SCIENTIFIC  •  2ND":"SCIENTIFIC  •  1ST",10,secondLayer?PURPLE:MUTED,true); flags.addView(mode);
+        input=new EditText(this); input.setSingleLine(false); input.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
         input.setTextSize(22); input.setTextColor(INK); input.setHintTextColor(MUTED); input.setHint("0");
         input.setBackgroundColor(Color.TRANSPARENT); input.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         display.addView(input,new LinearLayout.LayoutParams(-1,0,1)); input.setText(expression); input.setSelection(input.length());
-        preview=text("= 0",24,TEAL,true); preview.setSingleLine(true); preview.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);
+        preview=text("= 0",24,TEAL,true); preview.setSingleLine(true); preview.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
+        preview.setEllipsize(TextUtils.TruncateAt.START);
         display.addView(preview,new LinearLayout.LayoutParams(-1,dp(28)));
         input.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s,int start,int count,int after) { }
             public void onTextChanged(CharSequence s,int start,int before,int count) {
-                try { preview.setText("= " + Expression.format(new Expression(s.toString(),degrees,answer).evaluate())); preview.setTextColor(TEAL); }
-                catch(Exception e) { preview.setText(s.length()==0?"= 0":"…"); preview.setTextColor(MUTED); }
+                updatePreview(s.toString());
             }
             public void afterTextChanged(Editable e) { }
         });
+        updatePreview(expression);
         gap(body,6);
-        LinearLayout strip=row(); body.addView(strip);
+        LinearLayout strip=row(); memoryStrip=strip; body.addView(strip);
         small(strip,degrees?"DEG":"RAD",()->{ degrees=!degrees; getPreferences(0).edit().putBoolean("degrees",degrees).apply(); angleBadge.setText(degrees?"● DEG":"● RAD"); show("Calculate"); });
         small(strip,"M+",()->{ memory+=current(); saveMemory(); });
         small(strip,"M−",()->{ memory-=current(); saveMemory(); });
         small(strip,"MR",()->insert(Expression.format(memory)));
         small(strip,"MC",()->{ memory=0; saveMemory(); });
         gap(body,5);
-        LinearLayout keypad=column(); body.addView(keypad,new LinearLayout.LayoutParams(-1,0,1));
-        String[][] scientific={{"sin(","cos(","tan(","log(","ln("},{"asin(","acos(","atan(","√(","^"},{"π","e","x²","x!","nCr"},{"sinh(","cosh(","tanh(","abs(","nPr"},{"a/b","∛","eˣ","10ˣ","n√"}};
+        LinearLayout keypad=column(); calculatorKeys=keypad; body.addView(keypad,new LinearLayout.LayoutParams(-1,0,1));
+        String[][] scientific=secondLayer
+            ? new String[][]{{"asin(","acos(","atan(","sinh(","cosh("},{"tanh(","abs(","∛(","eˣ","10ˣ"},{"n√","π","e","Ans","1st"}}
+            : new String[][]{{"sin(","cos(","tan(","log(","ln("},{"√(","^","x²","x!","a/b"},{"π","e","nCr","nPr","2nd"}};
         for(String[] keys:scientific) keyRow(keypad,keys,true);
         String[][] number={{"AC","(",")","⌫","±"},{"7","8","9","÷","%"},{"4","5","6","×","1/x"},{"1","2","3","−","Ans"},{"0",".","EXP","+","="}};
         for(String[] keys:number) keyRow(keypad,keys,false);
         // The editor does not summon the keyboard just because the activity opened.
         body.setFocusableInTouchMode(true); body.requestFocus();
+    }
+    private void updatePreview(String value) {
+        try { preview.setText(getString(R.string.result_format, Expression.format(new Expression(value,degrees,answer).evaluate()))); preview.setTextColor(TEAL); }
+        catch(Exception e) { preview.setText(value.isEmpty()?"= 0":"…"); preview.setTextColor(MUTED); }
     }
     private void saveMemory() { getPreferences(0).edit().putLong("memory",Double.doubleToRawLongBits(memory)).apply(); }
     private double current() { try { return new Expression(input.getText().toString(),degrees,answer).evaluate(); } catch(Exception e) { return answer; } }
@@ -172,9 +205,10 @@ public class MainActivity extends Activity {
         LinearLayout line=row(); keypad.addView(line,new LinearLayout.LayoutParams(-1,0,1));
         for(String key:keys) {
             boolean equals=key.equals("=");
-            TextView button=text(key,science?13:16,equals?BG:(science?0xffc9c4ff:INK),true); button.setGravity(Gravity.CENTER);
+            boolean layer=key.equals("2nd") || key.equals("1st");
+            TextView button=text(key,science?14:18,equals?BG:(layer?BG:(science?0xffc9c4ff:INK)),true); button.setGravity(Gravity.CENTER);
             button.setIncludeFontPadding(false); button.setSingleLine(true);
-            button.setBackground(equals?gradient(TEAL,0xff72cfe8,10):shape(science?CARD:KEY,10));
+            button.setBackground(equals?gradient(TEAL,0xff72cfe8,10):(layer?gradient(PURPLE,0xff8e9bfa,10):shape(science?CARD:KEY,10)));
             LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,-1,1); p.setMargins(dp(2),dp(1),dp(2),dp(1)); line.addView(button,p);
             button.setOnClickListener(v->press(key));
         }
@@ -184,15 +218,21 @@ public class MainActivity extends Activity {
             case "AC": input.setText(""); return;
             case "⌫": int pos=input.getSelectionStart(); if(pos>0) input.getText().delete(pos-1,pos); return;
             case "=": calculate(); return;
+            case "2nd": case "1st": secondLayer=!secondLayer; show("Calculate"); return;
             case "x²": insert("^2"); return;
             case "x!": insert("!"); return;
             case "a/b": insert("/"); return;
-            case "∛": insert("^(1/3)"); return;
+            case "∛(": insert("cbrt("); return;
             case "n√": insert("^(1/"); return;
             case "eˣ": insert("exp("); return;
             case "10ˣ": insert("10^("); return;
             case "1/x": insert("^(-1)"); return;
-            case "±": insert("-"); return;
+            case "±":
+                String value=input.getText().toString();
+                if (value.startsWith("-(") && value.endsWith(")")) input.setText(value.substring(2,value.length()-1));
+                else if (value.startsWith("-")) input.setText(value.substring(1));
+                else input.setText(value.isEmpty()?"-":"-("+value+")");
+                input.setSelection(input.length()); return;
             case "EXP": insert("E"); return;
             default: insert(key);
         }
@@ -203,7 +243,7 @@ public class MainActivity extends Activity {
         try {
             double result=new Expression(query,degrees,answer).evaluate();
             String formatted=Expression.format(result); answer=result;
-            preview.setText("= " + formatted); preview.setTextColor(TEAL);
+            preview.setText(getString(R.string.result_format, formatted)); preview.setTextColor(TEAL);
             JSONObject entry=new JSONObject(); entry.put("expression",query); entry.put("result",formatted); entry.put("mode",degrees?"DEG":"RAD");
             JSONArray next=new JSONArray(); next.put(entry); for(int i=0;i<Math.min(99,history.length());i++) next.put(history.get(i));
             history=next; getPreferences(0).edit().putString("history",history.toString()).apply();
@@ -212,7 +252,7 @@ public class MainActivity extends Activity {
     }
     private void history() {
         if(history.length()==0) { empty("◷","No calculations yet","Your solved expressions will appear here."); return; }
-        TextView clear=text("CLEAR HISTORY  ↗",11,TEAL,true); clear.setGravity(Gravity.RIGHT); body.addView(clear);
+        TextView clear=text("CLEAR HISTORY  ↗",11,TEAL,true); clear.setGravity(Gravity.END); body.addView(clear);
         clear.setOnClickListener(v->{ history=new JSONArray(); getPreferences(0).edit().remove("history").apply(); show("History"); }); gap(body,12);
         for(int i=0;i<history.length();i++) {
             JSONObject item=history.optJSONObject(i); if(item==null) continue;
@@ -251,13 +291,14 @@ public class MainActivity extends Activity {
         EditText amount=new EditText(this); amount.setText("1"); amount.setSelectAllOnFocus(true); amount.setSingleLine(true); amount.setInputType(8194); amount.setTextColor(INK); amount.setTextSize(27); amount.setBackground(shape(KEY,12)); pad(amount,14,12); card.addView(amount); gap(card,22);
         card.addView(text("TO",11,MUTED,true)); gap(card,7);
         Spinner to=spinner(units[0]); card.addView(to); gap(card,17);
-        TextView result=text("= 1",31,TEAL,true); result.setGravity(Gravity.RIGHT); card.addView(result);
+        TextView result=text("= 1",31,TEAL,true); result.setGravity(Gravity.END); card.addView(result);
         Runnable update=()->{
             try {
                 int c=category.getSelectedItemPosition(), a=from.getSelectedItemPosition(), b=to.getSelectedItemPosition();
                 double value=Double.parseDouble(amount.getText().toString());
                 double converted=c==2?temperature(value,a,b):value*factors[c][a]/factors[c][b];
-                result.setText("= " + Expression.format(converted));
+                if (!Double.isFinite(converted)) throw new IllegalArgumentException("Result is too large");
+                result.setText(getString(R.string.result_format, Expression.format(converted)));
             } catch(Exception e) { result.setText("= —"); }
         };
         category.setOnItemSelectedListener(listener(()->{
@@ -289,7 +330,7 @@ public class MainActivity extends Activity {
         TextView art=text("  ◈  ",70,TEAL,true); art.setGravity(Gravity.CENTER); panel.addView(art); gap(panel,4);
         TextView title=text("Point. Capture. Calculate.",21,INK,true); title.setGravity(Gravity.CENTER); panel.addView(title); gap(panel,7);
         TextView subtitle=text("On-device OCR reads printed expressions.\nYou always review before solving.",13,MUTED,false); subtitle.setGravity(Gravity.CENTER); panel.addView(subtitle); gap(panel,22);
-        Button camera=new Button(this); camera.setText("◎   OPEN CAMERA"); camera.setTextColor(BG); camera.setTextSize(14); camera.setAllCaps(false); camera.setBackground(gradient(TEAL,0xff72cfe8,14)); panel.addView(camera,new LinearLayout.LayoutParams(-1,dp(52)));
+        Button camera=new Button(this); camera.setText(R.string.open_camera); camera.setTextColor(BG); camera.setTextSize(14); camera.setAllCaps(false); camera.setBackground(gradient(TEAL,0xff72cfe8,14)); panel.addView(camera,new LinearLayout.LayoutParams(-1,dp(52)));
         camera.setOnClickListener(v->launchCamera()); gap(body,17);
         LinearLayout info=column(); pad(info,18,18); info.setBackground(shape(CARD,18)); body.addView(info);
         info.addView(text("HOW IT WORKS",11,TEAL,true)); gap(info,12);
@@ -304,9 +345,10 @@ public class MainActivity extends Activity {
             photo=FileProvider.getUriForFile(this,getPackageName()+".files",file);
             Intent camera=new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
             camera.putExtra(MediaStore.EXTRA_OUTPUT,photo);
+            camera.setClipData(ClipData.newUri(getContentResolver(),"IWAT photo",photo));
             camera.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-            if(camera.resolveActivity(getPackageManager())==null) { message("No camera app found"); return; }
             startActivityForResult(camera,CAMERA);
+        } catch(ActivityNotFoundException e) { message("No camera app found");
         } catch(Exception e) { message("Camera unavailable: " + e.getMessage()); }
     }
     @Override protected void onActivityResult(int request,int result,Intent data) {
@@ -318,6 +360,7 @@ public class MainActivity extends Activity {
             message("Reading photo on this device…");
             recognizer.process(image).addOnSuccessListener(recognized->{
                 recognizer.close();
+                if (isFinishing() || isDestroyed()) return;
                 String candidate="";
                 for(var block:recognized.getTextBlocks()) for(var line:block.getLines()) {
                     String raw=line.getText().split("=",2)[0].replace('×','*').replace('÷','/').replace('−','-');
@@ -327,7 +370,7 @@ public class MainActivity extends Activity {
                 if(candidate.isEmpty()) { message("No expression found. Try a clearer photo."); return; }
                 expression=candidate; show("Calculate");
                 input.requestFocus(); message("Review the extracted expression, then tap =");
-            }).addOnFailureListener(e->{ recognizer.close(); message("Couldn't read photo. Please try again."); });
+            }).addOnFailureListener(e->{ recognizer.close(); if (!isFinishing() && !isDestroyed()) message("Couldn't read photo. Please try again."); });
         } catch(Exception e) { message("Couldn't open photo: " + e.getMessage()); }
     }
     private void message(String text) { android.widget.Toast.makeText(this,text,android.widget.Toast.LENGTH_LONG).show(); }
