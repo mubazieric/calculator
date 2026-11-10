@@ -2,4 +2,8 @@
     <string name="result_format">= %1$s</string>
     <string name="open_camera">◎   OPEN CAMERA</string>
     <string name="open_email_to_send">OPEN EMAIL TO SEND</string>
+    <string name="ai_subscribe">SEE PRICE &amp; SUBSCRIBE IN PLAY</string>
+    <string name="ai_restore">RESTORE / CHECK ACCESS</string>
+    <string name="ai_take_photo">TAKE PHOTO FOR AI STEPS</string>
+    <string name="ai_offer_price">Price in Play: %1$s for the first period. Confirm recurring price in checkout.</string>
 </resources>

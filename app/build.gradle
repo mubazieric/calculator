@@ -4,6 +4,8 @@ def admobAppId = providers.gradleProperty('IWAT_ADMOB_APP_ID').orNull
 def admobBannerId = providers.gradleProperty('IWAT_ADMOB_BANNER_ID').orNull
 def testAppId = 'ca-app-pub-3940256099942544~3347511713'
 def testBannerId = 'ca-app-pub-3940256099942544/6300978111'
+def aiServerUrl = providers.gradleProperty('IWAT_AI_SERVER_URL').orNull ?: ''
+if (aiServerUrl && !aiServerUrl.matches('https://[^/]+.*')) throw new GradleException('IWAT_AI_SERVER_URL must use HTTPS')
 
 android {
     namespace 'com.iwat.scientific'
@@ -13,8 +15,9 @@ android {
         applicationId 'com.iwat.scientific'
         minSdk 24
         targetSdk 36
-        versionCode 8
-        versionName '1.6.1'
+        versionCode 9
+        versionName '1.7.0'
+        buildConfigField 'String', 'AI_SERVER_URL', "\"${aiServerUrl}\""
         manifestPlaceholders = [admobAppId: admobAppId ?: testAppId]
     }
     buildFeatures { buildConfig true }
@@ -41,6 +44,7 @@ dependencies {
     implementation 'com.google.mlkit:text-recognition:16.0.1'
     implementation 'com.google.android.gms:play-services-ads:25.5.0'
     implementation 'com.google.android.ump:user-messaging-platform:4.0.0'
+    implementation 'com.android.billingclient:billing:9.1.0'
     testImplementation 'junit:junit:4.13.2'
 }
 

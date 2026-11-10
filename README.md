@@ -11,6 +11,7 @@ Native Android scientific calculator with a textured charcoal keypad, lavender f
 - Memory controls (M+, M−, MR, MC), live preview and locally saved calculation history.
 - Dedicated converter: length, mass, temperature, area, volume, time, speed and data.
 - Photo-to-expression: full-size camera image, on-device ML Kit Latin text recognition, editable extraction and explicit solve. No server, API key or image upload.
+- Optional **IWAT AI Plus**: Play Billing monthly subscription with up to 50 cloud-AI photo analyses per UTC calendar month, backend Play subscription verification, capped usage and server-side AI key. Free on-device OCR remains available. The AI purchase UI stays disabled until a deployed HTTPS server is configured. See [backend/README.md](backend/README.md) for deployment and proposed pricing; this source checkout does not include a running cloud service.
 - Contact screen: validated name, email, subject and message fields open a prefilled email to **ericmubazi2010@gmail.com**. The user must review and tap Send in an installed email app; the calculator does not transmit messages itself.
 - Google AdMob banner integration on non-calculator screens only, so the keypad stays visible. Google UMP checks consent before ads; Contact provides a privacy-options entry point where required. Debug builds use Google test IDs. Release builds do not request ads until real IDs are configured.
 

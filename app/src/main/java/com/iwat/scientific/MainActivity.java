@@ -53,7 +53,9 @@ public class MainActivity extends Activity {
     private static final int INK = 0xfff1f0f5, MUTED = 0xffa3a4b0, BG = 0xff101116;
     private static final int CARD = 0xff34343e, KEY = 0xff252831, TEAL = 0xffe9bf52, PURPLE = 0xffb899fa;
     private static final int SCREEN = 0xffddebe9, SCREEN_INK = 0xff1c2834, ORANGE = 0xfff09a5b;
-    private static final int CAMERA = 4;
+    private static final int CAMERA = 4, AI_CAMERA = 5;
+    private AiPlus aiPlus;
+    private TextView aiStatus;
     private LinearLayout root, body, nav, calculatorKeys, memoryStrip, adSlot;
     private ConsentInformation consentInformation;
     private AdView adView;
@@ -85,6 +87,10 @@ public class MainActivity extends Activity {
             String photoPath=state.getString("photoPath");
             if(photoPath!=null) photoFile=new File(photoPath);
         }
+        if(!BuildConfig.AI_SERVER_URL.isEmpty()) {
+            aiPlus=new AiPlus(this);
+            aiPlus.setChanges(status->{ if(aiStatus!=null) aiStatus.setText(status); });
+        }
         show(state == null ? "Calculate" : state.getString("screen", "Calculate"));
         if (BuildConfig.ADS_ENABLED) requestAdConsent();
     }
@@ -102,7 +108,7 @@ public class MainActivity extends Activity {
     }
     @Override protected void onResume() { super.onResume(); if(adView!=null) adView.resume(); }
     @Override protected void onPause() { if(adView!=null) adView.pause(); super.onPause(); }
-    @Override protected void onDestroy() { if(adView!=null) { adView.destroy(); adView=null; } super.onDestroy(); }
+    @Override protected void onDestroy() { if(adView!=null) { adView.destroy(); adView=null; } if(aiPlus!=null) aiPlus.close(); super.onDestroy(); }
 
     private void requestAdConsent() {
         consentInformation=UserMessagingPlatform.getConsentInformation(this);
@@ -155,7 +161,7 @@ public class MainActivity extends Activity {
         if (input != null && screen.equals("Calculate")) expression = input.getText().toString();
         if(adView!=null) { adView.destroy(); adView=null; }
         screen = page;
-        calculatorKeys = null; memoryStrip = null; adSlot=null;
+        calculatorKeys = null; memoryStrip = null; adSlot=null; aiStatus=null;
         root = column(); root.setBackground(texture());
         setContentView(root);
         if (Build.VERSION.SDK_INT >= 30) {
@@ -731,8 +737,28 @@ public class MainActivity extends Activity {
         info.addView(text("01   Photograph a clear, well-lit expression\n\n02   Review and correct the recognized text\n\n03   Tap solve in the calculator",14,INK,false));
         gap(body,14);
         body.addView(text("Privacy first: images are processed on-device. No photo or answer is uploaded.",12,MUTED,false));
+        gap(body,20);
+        LinearLayout premium=column(); pad(premium,18,18); premium.setBackground(shape(CARD,18)); body.addView(premium);
+        premium.addView(text("IWAT AI PLUS  ·  OPTIONAL",16,TEAL,true)); gap(premium,10);
+        premium.addView(text("Cloud AI reads a photo and explains its steps. Up to 50 photo analyses per UTC calendar month. Auto-renewing monthly subscription; manage or cancel in Google Play. AI answers can be wrong—verify important work.",13,INK,false)); gap(premium,10);
+        aiStatus=text(BuildConfig.AI_SERVER_URL.isEmpty()?"Not yet available: service setup in progress. No purchases can be made.":"Checking Google Play…",13,MUTED,false);
+        premium.addView(aiStatus); gap(premium,12);
+        Button subscribe=new Button(this); subscribe.setAllCaps(false); subscribe.setText(R.string.ai_subscribe);
+        subscribe.setEnabled(aiPlus!=null); premium.addView(subscribe);
+        subscribe.setOnClickListener(v->{ if(aiPlus!=null) aiPlus.buy(); });
+        Button restore=new Button(this); restore.setAllCaps(false); restore.setText(R.string.ai_restore);
+        restore.setEnabled(aiPlus!=null); premium.addView(restore);
+        restore.setOnClickListener(v->aiPlus.refresh());
+        Button solveAi=new Button(this); solveAi.setAllCaps(false); solveAi.setText(R.string.ai_take_photo);
+        solveAi.setEnabled(aiPlus!=null); premium.addView(solveAi);
+        solveAi.setOnClickListener(v->launchCamera(AI_CAMERA));
+        TextView manage=text("MANAGE / CANCEL SUBSCRIPTION  ↗",12,PURPLE,true); premium.addView(manage);
+        manage.setOnClickListener(v->{ try { startActivity(AiPlus.manage()); } catch(ActivityNotFoundException e) { message("Google Play unavailable"); } });
+        if(aiPlus!=null && aiPlus.price()!=null) aiStatus.setText(getString(R.string.ai_offer_price,aiPlus.price()));
+        gap(body,10); body.addView(text("AI photos are sent to IWAT's service and its AI provider only when you choose AI solving. Free OCR stays on-device.",12,MUTED,false));
     }
-    private void launchCamera() {
+    private void launchCamera() { launchCamera(CAMERA); }
+    private void launchCamera(int mode) {
         try {
             File folder=new File(getCacheDir(),"photos"); if(!folder.exists() && !folder.mkdirs()) throw new IllegalStateException("Cannot create photo folder");
             photoFile=File.createTempFile("iwat_",".jpg",folder);
@@ -741,7 +767,7 @@ public class MainActivity extends Activity {
             camera.putExtra(MediaStore.EXTRA_OUTPUT,photo);
             camera.setClipData(ClipData.newUri(getContentResolver(),"IWAT photo",photo));
             camera.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-            startActivityForResult(camera,CAMERA);
+            startActivityForResult(camera,mode);
         } catch(ActivityNotFoundException e) { clearPhoto(); message("No camera app found");
         } catch(Exception e) { clearPhoto(); message("Camera unavailable: " + e.getMessage()); }
     }
@@ -751,8 +777,19 @@ public class MainActivity extends Activity {
     }
     @Override protected void onActivityResult(int request,int result,Intent data) {
         super.onActivityResult(request,result,data);
-        if(request!=CAMERA) return;
+        if(request!=CAMERA && request!=AI_CAMERA) return;
         if(result!=RESULT_OK || photo==null) { clearPhoto(); return; }
+        if(request==AI_CAMERA) {
+            if(aiPlus==null || aiPlus.token()==null) { clearPhoto(); message("Restore an AI Plus subscription first"); return; }
+            Uri captured=photo;
+            message("Sending image for AI analysis…");
+            aiPlus.solve(captured,output->{
+                clearPhoto();
+                if(isFinishing() || isDestroyed()) return;
+                new AlertDialog.Builder(this).setTitle("AI photo analysis").setMessage(output).setPositiveButton("Close",null).show();
+            });
+            return;
+        }
         try {
             InputImage image=InputImage.fromFilePath(this,photo);
             var recognizer=TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
