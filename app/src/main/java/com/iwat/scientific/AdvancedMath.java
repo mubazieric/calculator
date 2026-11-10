@@ -93,12 +93,17 @@ public final class AdvancedMath {
         square(matrix); int n=matrix.length;
         if(rhs==null || rhs.length!=n) throw new IllegalArgumentException("Enter one result per equation");
         double[][] a=new double[n][n+1];
-        for(int r=0;r<n;r++) { System.arraycopy(matrix[r],0,a[r],0,n); a[r][n]=finite(rhs[r]); }
+        double scale=0;
+        for(int r=0;r<n;r++) {
+            System.arraycopy(matrix[r],0,a[r],0,n); a[r][n]=finite(rhs[r]);
+            for(int c=0;c<n;c++) scale=Math.max(scale,Math.abs(a[r][c]));
+        }
+        if(scale==0) throw new IllegalArgumentException("No unique solution (singular system)");
         for(int col=0;col<n;col++) {
             int pivot=col; for(int r=col+1;r<n;r++) if(Math.abs(a[r][col])>Math.abs(a[pivot][col])) pivot=r;
-            if(Math.abs(a[pivot][col])<1e-12) throw new IllegalArgumentException("No unique solution (singular system)");
+            if(Math.abs(a[pivot][col])<=scale*1e-14) throw new IllegalArgumentException("No unique solution (singular system)");
             double[] tmp=a[pivot]; a[pivot]=a[col]; a[col]=tmp;
-            double scale=a[col][col]; for(int c=col;c<=n;c++) a[col][c]/=scale;
+            double pivotValue=a[col][col]; for(int c=col;c<=n;c++) a[col][c]/=pivotValue;
             for(int r=0;r<n;r++) if(r!=col) {
                 double factor=a[r][col]; for(int c=col;c<=n;c++) a[r][c]-=factor*a[col][c];
             }
@@ -151,7 +156,10 @@ public final class AdvancedMath {
         double d=finite(b*b-4*a*c);
         if(d>=0) {
             double root=Math.sqrt(d);
-            return "x₁ = " + Expression.format(finite((-b+root)/(2*a))) + "\nx₂ = " + Expression.format(finite((-b-root)/(2*a)));
+            double stable=-.5*(b+Math.copySign(root,b));
+            double first=stable==0?0:stable/a;
+            double second=stable==0?0:c/stable;
+            return "x₁ = " + Expression.format(finite(first)) + "\nx₂ = " + Expression.format(finite(second));
         }
         double real=finite(-b/(2*a)),imag=finite(Math.sqrt(-d)/Math.abs(2*a));
         return "x₁ = " + Expression.format(real) + " + " + Expression.format(imag) + "i\nx₂ = " + Expression.format(real) + " − " + Expression.format(imag) + "i";
@@ -180,12 +188,14 @@ public final class AdvancedMath {
         return finite(Math.exp(log));
     }
     public static double binomialCdf(int n,int k,double p) {
+        if(n<0 || n>1000 || p<0 || p>1 || !Double.isFinite(p)) throw new IllegalArgumentException("Use 0 ≤ n ≤ 1000 and 0 ≤ p ≤ 1");
         if(k<0) return 0;
         if(k>=n) { binomial(n,n,p); return 1; }
         double sum=0; for(int i=0;i<=k;i++) sum+=binomial(n,i,p);
         return Math.min(1,finite(sum));
     }
     public static double poissonCdf(int k,double lambda) {
+        if(lambda<0 || !Double.isFinite(lambda)) throw new IllegalArgumentException("Use λ ≥ 0");
         if(k<0) return 0;
         if(k>1000) throw new IllegalArgumentException("Use k ≤ 1000");
         double sum=0; for(int i=0;i<=k;i++) sum+=poisson(i,lambda);
@@ -212,6 +222,7 @@ public final class AdvancedMath {
     }
     public static String fraction(double value) {
         if(!Double.isFinite(value)) throw new IllegalArgumentException("Undefined result");
+        if(value!=0 && Math.abs(value)<1e-7) throw new IllegalArgumentException("No simple fraction found");
         long bestN=0,bestD=1; double bestError=Double.MAX_VALUE;
         for(int d=1;d<=10000;d++) {
             if(Math.abs(value)>Long.MAX_VALUE/(double)d) break;

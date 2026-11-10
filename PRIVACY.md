@@ -4,7 +4,7 @@ Last updated: 7 November 2026. Contact: ericmubazi2010@gmail.com.
 
 Calculator expressions, saved history and memory values are stored locally on the device. Android backup and device transfer of app data are disabled. You can clear history inside the app or remove all local data by uninstalling it.
 
-The camera feature processes captured images with on-device ML Kit text recognition. IWAT does not operate an image-upload server. Images are placed in the app's temporary cache. Please review recognized text before solving. Google's SDKs may process diagnostics according to their own terms.
+The camera feature processes captured images with on-device ML Kit text recognition. IWAT does not operate an image-upload server. Images are placed in the app's temporary cache and deleted after recognition completes or the camera is cancelled. Please review recognized text before solving. Google's SDKs may process diagnostics according to their own terms.
 
 The Contact form opens an email app with your entered name, reply email address, subject and message. IWAT does not transmit the form on its own. If you choose to send the email, your email provider and the developer will receive that information; their services govern delivery and retention. Do not include sensitive personal information in a message.
 

@@ -22,6 +22,7 @@ public class AdvancedMathTest {
         assertEquals(216,AdvancedMath.lcm(54,24));
         assertEquals("3/4",AdvancedMath.fraction(.75));
         assertEquals("-1/3",AdvancedMath.fraction(-1.0/3));
+        assertThrows(IllegalArgumentException.class,()->AdvancedMath.fraction(1e-15));
     }
     @Test public void extendedMatricesAndVectors() {
         double[][] matrix={{2,0,1},{1,3,0},{0,1,2}};
@@ -36,6 +37,7 @@ public class AdvancedMathTest {
         double[][] six=new double[6][6]; for(int i=0;i<6;i++) six[i][i]=i+1;
         assertEquals(720,AdvancedMath.matrixDeterminant(six),1e-9);
         assertEquals(1,AdvancedMath.matrixMultiply(six,AdvancedMath.matrixInverse(six))[5][5],1e-10);
+        assertArrayEquals(new double[]{2,3},AdvancedMath.linearSystem(new double[][]{{1e-13,0},{0,1e-13}},new double[]{2e-13,3e-13}),1e-10);
     }
     @Test public void tablesLimitsAndEquations() {
         assertEquals(1,AdvancedMath.limit("sin(x)/x",0,false),1e-4);
@@ -45,6 +47,7 @@ public class AdvancedMathTest {
         assertThrows(IllegalArgumentException.class,()->AdvancedMath.table("x",0,1000,1,true));
         assertTrue(AdvancedMath.quadratic(1,0,1).contains("i"));
         assertTrue(AdvancedMath.quadratic(1,-3,2).contains("x₁ = 2"));
+        assertTrue(AdvancedMath.quadratic(1,1e12,1).contains("-1E-12"));
     }
     @Test public void distributions() {
         assertEquals(.5,AdvancedMath.normalCdf(0,0,1),1e-6);
@@ -52,6 +55,8 @@ public class AdvancedMathTest {
         assertEquals(.375,AdvancedMath.binomial(4,2,.5),1e-12);
         assertEquals(Math.exp(-2)*2,AdvancedMath.poisson(1,2),1e-12);
         assertThrows(IllegalArgumentException.class,()->AdvancedMath.normalCdf(0,0,0));
+        assertThrows(IllegalArgumentException.class,()->AdvancedMath.binomialCdf(-1,-1,.5));
+        assertThrows(IllegalArgumentException.class,()->AdvancedMath.poissonCdf(-1,-1));
         assertEquals(.6875,AdvancedMath.binomialCdf(4,2,.5),1e-12);
         assertEquals(Math.exp(-2)*5,AdvancedMath.poissonCdf(2,2),1e-12);
         assertEquals(36.0/70,AdvancedMath.hypergeometric(8,4,4,2),1e-12);

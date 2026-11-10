@@ -18,7 +18,7 @@ Native Android scientific calculator with a textured charcoal keypad, lavender f
 
 Open the repository root in Android Studio and run the `app` module, or from the repository root run `gradlew.bat :app:assembleDebug` on Windows (`./gradlew :app:assembleDebug` on macOS/Linux). Requires Android SDK 36, Java 17+ and internet for first-time dependencies. Debug APK: `app/build/outputs/apk/debug/app-debug.apk`. Minimum Android version: 7.0 (API 24); target: Android 16 (API 36).
 
-Run `gradlew.bat :app:testDebugUnitTest :app:lintDebug` (or `./gradlew` on macOS/Linux) for arithmetic regression tests and Android lint checks. The calculation keypad switches between **1st** and **2nd** function layers to keep buttons comfortably sized without scrolling. On Android 11+, the keypad temporarily hides while the system keyboard is open.
+Run `gradlew.bat :app:testDebugUnitTest :app:lintDebug` (or `./gradlew` on macOS/Linux) for arithmetic regression tests and Android lint checks. See [QA.md](QA.md) for device checks that a build cannot verify. The calculation keypad switches between **1st** and **2nd** function layers to keep buttons comfortably sized without scrolling. On Android 11+, the keypad temporarily hides while the system keyboard is open.
 
 ## Scope notes
 

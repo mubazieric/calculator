@@ -61,6 +61,7 @@ public class MainActivity extends Activity {
     private EditText input;
     private TextView preview, angleBadge;
     private Uri photo;
+    private File photoFile;
     private boolean degrees = true;
     private boolean secondLayer = false;
     private boolean engineering = false;
@@ -81,6 +82,8 @@ public class MainActivity extends Activity {
             secondLayer = state.getBoolean("secondLayer", false);
             engineering = state.getBoolean("engineering", false);
             photo = state.getParcelable("photo");
+            String photoPath=state.getString("photoPath");
+            if(photoPath!=null) photoFile=new File(photoPath);
         }
         show(state == null ? "Calculate" : state.getString("screen", "Calculate"));
         if (BuildConfig.ADS_ENABLED) requestAdConsent();
@@ -94,6 +97,7 @@ public class MainActivity extends Activity {
         state.putBoolean("secondLayer", secondLayer);
         state.putBoolean("engineering", engineering);
         state.putParcelable("photo", photo);
+        if(photoFile!=null) state.putString("photoPath",photoFile.getAbsolutePath());
         super.onSaveInstanceState(state);
     }
     @Override protected void onResume() { super.onResume(); if(adView!=null) adView.resume(); }
@@ -277,7 +281,10 @@ public class MainActivity extends Activity {
         return Expression.format(value/Math.pow(10,exponent))+"E"+exponent;
     }
     private void saveMemory() { getPreferences(0).edit().putLong("memory",Double.doubleToRawLongBits(memory)).apply(); }
-    private double current() { try { return new Expression(input.getText().toString(),degrees,answer).evaluate(); } catch(Exception e) { return answer; } }
+    private double current() {
+        String value=input.getText().toString().trim();
+        return value.isEmpty()?answer:new Expression(value,degrees,answer).evaluate();
+    }
     private void small(LinearLayout parent,String label,Runnable action) {
         TextView button=text(label,label.length()>4?10:12,INK,true); button.setGravity(Gravity.CENTER); button.setBackground(shape(CARD,14));
         button.setSingleLine(true); button.setIncludeFontPadding(false);
@@ -365,7 +372,10 @@ public class MainActivity extends Activity {
             final int selected=i;
             TextView option=text(choices[i],16,INK,true); pad(option,15,13); option.setBackground(shape(i%2==0?KEY:CARD,12));
             LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2); params.bottomMargin=dp(5); content.addView(option,params);
-            option.setOnClickListener(v->{ dialog.dismiss(); action.accept(selected); });
+            option.setOnClickListener(v->{ dialog.dismiss();
+                try { action.accept(selected); }
+                catch(Exception e) { message(e.getMessage()==null?"Unable to complete operation":e.getMessage()); }
+            });
         }
         openDialog(dialog,title);
     }
@@ -571,7 +581,7 @@ public class MainActivity extends Activity {
     }
     private void memoryMenu() {
         menu("MEMORY  ·  "+Expression.format(memory),new String[]{"M+  Add display to memory","M−  Subtract display from memory","MR  Recall memory","MC  Clear memory"},index->{
-            if(index==0) memory+=current(); if(index==1) memory-=current();
+            if(index==0) memory=AdvancedMath.finite(memory+current()); if(index==1) memory=AdvancedMath.finite(memory-current());
             if(index==2) insert(Expression.format(memory)); if(index==3) memory=0;
             saveMemory(); message("Memory: "+Expression.format(memory));
         });
@@ -725,25 +735,31 @@ public class MainActivity extends Activity {
     private void launchCamera() {
         try {
             File folder=new File(getCacheDir(),"photos"); if(!folder.exists() && !folder.mkdirs()) throw new IllegalStateException("Cannot create photo folder");
-            File file=File.createTempFile("iwat_",".jpg",folder);
-            photo=FileProvider.getUriForFile(this,getPackageName()+".files",file);
+            photoFile=File.createTempFile("iwat_",".jpg",folder);
+            photo=FileProvider.getUriForFile(this,getPackageName()+".files",photoFile);
             Intent camera=new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
             camera.putExtra(MediaStore.EXTRA_OUTPUT,photo);
             camera.setClipData(ClipData.newUri(getContentResolver(),"IWAT photo",photo));
             camera.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
             startActivityForResult(camera,CAMERA);
-        } catch(ActivityNotFoundException e) { message("No camera app found");
-        } catch(Exception e) { message("Camera unavailable: " + e.getMessage()); }
+        } catch(ActivityNotFoundException e) { clearPhoto(); message("No camera app found");
+        } catch(Exception e) { clearPhoto(); message("Camera unavailable: " + e.getMessage()); }
+    }
+    private void clearPhoto() {
+        if(photoFile!=null) { if(photoFile.exists() && !photoFile.delete()) android.util.Log.w("IWAT","Could not remove temporary photo"); photoFile=null; }
+        photo=null;
     }
     @Override protected void onActivityResult(int request,int result,Intent data) {
         super.onActivityResult(request,result,data);
-        if(request!=CAMERA || result!=RESULT_OK || photo==null) return;
+        if(request!=CAMERA) return;
+        if(result!=RESULT_OK || photo==null) { clearPhoto(); return; }
         try {
             InputImage image=InputImage.fromFilePath(this,photo);
             var recognizer=TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
             message("Reading photo on this device…");
             recognizer.process(image).addOnSuccessListener(recognized->{
                 recognizer.close();
+                clearPhoto();
                 if (isFinishing() || isDestroyed()) return;
                 String candidate="";
                 for(var block:recognized.getTextBlocks()) for(var line:block.getLines()) {
@@ -754,8 +770,8 @@ public class MainActivity extends Activity {
                 if(candidate.isEmpty()) { message("No expression found. Try a clearer photo."); return; }
                 expression=candidate; show("Calculate");
                 input.requestFocus(); message("Review the extracted expression, then tap =");
-            }).addOnFailureListener(e->{ recognizer.close(); if (!isFinishing() && !isDestroyed()) message("Couldn't read photo. Please try again."); });
-        } catch(Exception e) { message("Couldn't open photo: " + e.getMessage()); }
+            }).addOnFailureListener(e->{ recognizer.close(); clearPhoto(); if (!isFinishing() && !isDestroyed()) message("Couldn't read photo. Please try again."); });
+        } catch(Exception e) { clearPhoto(); message("Couldn't open photo: " + e.getMessage()); }
     }
     private void message(String text) { android.widget.Toast.makeText(this,text,android.widget.Toast.LENGTH_LONG).show(); }
 }
