@@ -1,10 +1,10 @@
 # IWAT Scientific Calculator — Privacy Notice
 
-Last updated: 7 November 2026. Contact: ericmubazi2010@gmail.com.
+Last updated: 11 November 2026. Contact: ericmubazi2010@gmail.com.
 
 Calculator expressions, saved history and memory values are stored locally on the device. Android backup and device transfer of app data are disabled. You can clear history inside the app or remove all local data by uninstalling it.
 
-The free camera feature processes captured images with on-device ML Kit text recognition; it does not upload images. The optional AI Plus feature, when configured and explicitly selected, sends a compressed photo to the IWAT backend and an AI provider for step-by-step analysis. The backend does not save the image but its provider may process it under its own data policies. Camera images are placed in the app's temporary cache and deleted after analysis completes or the camera is cancelled. AI results can be inaccurate; review them before relying on them. Google's SDKs may process diagnostics according to their own terms.
+The free camera feature processes captured images with on-device ML Kit text recognition; it does not upload images. The optional AI Plus feature, when configured and explicitly selected, sends a compressed photo to the IWAT backend and **Google Gemini API** for step-by-step analysis. The backend does not save the image but Google may process it under its [Gemini API terms](https://ai.google.dev/gemini-api/terms) and [privacy policy](https://policies.google.com/privacy). Camera images are placed in the app's temporary cache and deleted after analysis completes or the camera is cancelled. AI results can be inaccurate; review them before relying on them. Google's SDKs may process diagnostics according to their own terms.
 
 AI Plus uses Google Play Billing. Your purchase token is sent over HTTPS to the IWAT backend, which verifies subscription status with Google Play and keeps a one-way token hash, monthly usage count and AI result for retry handling. The backend records token usage counts for cost tracking. Payment details are handled by Google Play, not IWAT. Remaining analyses reset each UTC calendar month. Consult the app's subscription screen and Google Play checkout for the current price and renewal terms; cancellation is available through Google Play. Contact the developer to request deletion of service-side usage data; doing so does not cancel your subscription.
 
